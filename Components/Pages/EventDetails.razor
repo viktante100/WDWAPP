@@ -1,0 +1,45 @@
+@page "/evenemang/{Id:int}"
+@attribute [ExcludeFromInteractiveRouting]
+@using Microsoft.EntityFrameworkCore
+@using WDWAPP.Data
+@inject ApplicationDbContext Database
+@inject NavigationManager Navigation
+@inject MatchRequestService Requests
+@using WDWAPP.Services
+
+<PageTitle>@(item?.Title ?? "Evenemanget hittades inte")</PageTitle>
+<section class="news-section">
+    @if (item is null) { <h1>Evenemanget finns inte längre.</h1><a href="/kalender">Till kalendern</a> }
+    else
+    {
+        <p><a href="@($"/kalender?Month={item.Date:yyyy-MM}&Day={item.Date:yyyy-MM-dd}")">Till kalendern</a></p>
+        <article class="news-card red-border @CalendarPresentation.CssClass(item.Type)">
+            @if (item.DisplayImageUrl is not null)
+            { <div class="news-image-frame"><img class="news-image" src="@item.DisplayImageUrl" alt="@item.ImageDescription" /></div> }
+            <div class="news-content">
+                <span class="event-type">@CalendarPresentation.Label(item.Type)</span>
+                <h1>@item.Title</h1>
+                <EventDate Item="item" />
+                <p class="news-body">@item.Description</p>
+                @if (item.ExternalLink is not null) { <p><a href="@item.ExternalLink" rel="noopener noreferrer">@item.ExternalLink</a></p> }
+                <AuthorizeView Policy="@AccessLevels.KeyMember">
+                    @if (item.LeagueSessionId.HasValue) { <p><a href="/ligan/omgang/@item.LeagueSessionId">Hantera ligaomgång</a></p> }
+                    else { <div class="news-actions"><a href="@($"/hantera/evenemang/{Id}")">Redigera</a><a href="@($"/hantera/evenemang/{Id}/ta-bort")">Ta bort</a></div> }
+                </AuthorizeView>
+            </div>
+        </article>
+    }
+</section>
+@code {
+    [Parameter] public int Id { get; set; }
+    [CascadingParameter] private HttpContext HttpContext { get; set; } = default!;
+    private CalendarEvent? item;
+    protected override async Task OnInitializedAsync()
+    {
+        HttpContext.Response.Headers.CacheControl = "no-store";
+        var access = await Requests.AccessAsync(HttpContext.User);
+        item = await Database.Events.AsNoTracking().VisibleTo(access.UserId, access.Admin).SingleOrDefaultAsync(item => item.Id == Id);
+        if (item is null) HttpContext.Response.StatusCode = 404;
+        else if (item.MatchRequestId.HasValue) Navigation.NavigateTo($"/sok-match/{item.MatchRequestId}", forceLoad: true);
+    }
+}

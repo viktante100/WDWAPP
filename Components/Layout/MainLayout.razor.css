@@ -1,0 +1,120 @@
+.site-nav {
+    background: #222;
+    border-bottom: 2px solid #fff;
+}
+
+.nav-inner {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: center;
+    gap: .5rem;
+    max-width: 1200px;
+    min-height: 110px;
+    margin: auto;
+    padding: .5rem 1rem;
+}
+
+.menu { justify-self: start; }
+
+.menu-button {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    font-size: 2rem;
+    cursor: pointer;
+    list-style: none;
+}
+.menu-button::-webkit-details-marker { display: none; }
+
+.menu-panel {
+    position: absolute;
+    top: 100%;
+    left: 1rem;
+    width: min(280px, calc(100% - 2rem));
+    background: #222;
+    box-shadow: 0 5px 15px #0006;
+    z-index: 100;
+}
+
+.menu-panel a {
+    display: block;
+    padding: 1rem 1.25rem;
+    text-decoration: none;
+    border-bottom: 1px solid #444;
+}
+.menu-panel a:hover { background: #444; }
+
+.nav-logo { justify-self: center; }
+.nav-logo img {
+    display: block;
+    width: 100%;
+    max-width: 150px;
+    height: 100px;
+    object-fit: contain;
+}
+
+.login-area {
+    justify-self: end;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: .25rem;
+    min-height: 44px;
+    max-width: 100%;
+    font-size: .8rem;
+    text-align: center;
+    text-decoration: none;
+    overflow-wrap: anywhere;
+}
+.login-area i { font-size: 1.5rem; }
+.login-area:hover { color: #ccc; }
+
+main {
+    flex: 1;
+    width: 100%;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 1.5rem 1rem;
+}
+
+.site-footer {
+    width: calc(100% - 2rem);
+    max-width: 1168px;
+    margin: auto;
+    padding: 1.5rem 1rem;
+    text-align: center;
+    color: #aaa;
+    font-size: .875rem;
+    border-top: 1px solid #444;
+}
+
+#blazor-error-ui {
+    display: none;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    padding: 1rem 3rem 1rem 1rem;
+    background: #fff3cd;
+    color: #222;
+    z-index: 1000;
+}
+#blazor-error-ui a { color: #222; }
+#blazor-error-ui .dismiss {
+    position: absolute;
+    right: .5rem;
+    top: .25rem;
+    color: #222;
+    background: transparent;
+    border: 0;
+}
+
+@media (min-width: 700px) {
+    .nav-inner { min-height: 150px; padding-inline: 1.25rem; }
+    .nav-logo img { height: 140px; max-width: 220px; }
+    .login-area { flex-direction: row; font-size: 1rem; gap: .5rem; }
+    main { padding: 2rem 1.25rem; }
+}

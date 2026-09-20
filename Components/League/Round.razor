@@ -1,0 +1,83 @@
+@page "/ligan/omgang/{Id:int}"
+@inject ApplicationDbContext Database
+<PageTitle>Ligaomgång</PageTitle>
+<section class="news-section">
+    <a href="/ligan">Till ligan</a>
+    @if (session is null) { <h1>Omgången saknas</h1> }
+    else
+    {
+        <h1>Omgång @Id · @session.Date.ToString("yyyy-MM-dd")</h1>
+        <p>@session.Season.Title @(session.Season.IsClosed ? "· Avslutad" : "")</p>
+        <p>@LeagueLabels.Session(session.Status)</p>
+        @if (!session.Season.IsClosed && registration is null)
+        { <p><a href="/ligan/atgard?action=enroll&season=@session.SeasonId">Anmäl mig till @session.Season.Title</a></p> }
+        @if (!session.Season.IsClosed && session.Status == LeagueSessionStatus.Open && me is not null && registration is not null && session.Date >= LeagueService.RegistrationDate(registration) && entries.All(p => p.PlayerId != me.Id))
+        { <p><a href="@ActionLink("join")">Anmäl mig till omgången</a></p> }
+        @if (!session.Season.IsClosed && session.Status != LeagueSessionStatus.Cancelled && (admin || (session.Status == LeagueSessionStatus.Open && entries.Any(p => p.PlayerId == me?.Id && p.MatchId is null && !p.IsBye))))
+        { <p><a href="@ActionLink("report")">Rapportera match</a></p> }
+        @if (admin)
+        {
+            <div class="news-actions"><a href="@ActionLink("date")">Ändra datum</a>
+            @if (session.Status == LeagueSessionStatus.Open) { <a href="@ActionLink("finalize")">Slutför omgång och beräkna ELO</a> }
+            else if (!session.Season.IsClosed) { <a href="@ActionLink("reopen")">Öppna omgång igen</a> }
+            @if (session.Status != LeagueSessionStatus.Cancelled) { <a href="@ActionLink("cancel")">Ställ in omgång</a> }</div>
+        }
+        <h2>Anmälda spelare</h2>
+        <ul>
+        @foreach (var entry in entries)
+        {
+            <li>@entry.Player.User.UserName · @(entry.IsBye ? "WO (+3 poäng, ingen spelad match)" : entry.MatchId is null ? "Utan match" : "Match rapporterad")
+                @if (admin && entry.MatchId is null && session.Status != LeagueSessionStatus.Cancelled)
+                { <a href="@(ActionLink(entry.IsBye ? "remove-bye" : "bye") + $"&player={entry.PlayerId}")">@(entry.IsBye ? "Ta bort WO" : "Tilldela WO")</a> }
+            </li>
+        }
+        </ul>
+        <h2>@(admin ? "Alla matcher" : "Mina matcher")</h2>
+        @foreach (var match in matches)
+        {
+            var one = Name(match.PlayerOneId); var two = Name(match.PlayerTwoId);
+            <article class="news-content red-border league-match-card">
+                <h3>@one – @two</h3><LeagueMatchSummary Match="match" One="@one" Two="@two" />
+                <p>Rapporterat av @Name(match.ReporterId)</p>
+                @if (session.Status != LeagueSessionStatus.Cancelled && (admin || (!session.Season.IsClosed && session.Status == LeagueSessionStatus.Open)))
+                {
+                    <div class="news-actions">
+                    @if (match.Status == LeagueMatchStatus.Pending && me is not null && (match.PlayerOneId == me.Id || match.PlayerTwoId == me.Id) && match.ReporterId != me.Id)
+                    { <a href="@ActionLink("confirm", match.Id)">Bekräfta</a><a href="@ActionLink("dispute", match.Id)">Bestrid</a> }
+                    @if (admin || match.Status != LeagueMatchStatus.Confirmed) { <a href="@ActionLink("edit", match.Id)">@(admin ? "Korrigera resultat" : "Rapportera nytt resultat")</a> }
+                    @if (admin) { <a href="@ActionLink("delete", match.Id)">Ta bort match</a> }
+                    </div>
+                }
+                @foreach (var rating in ratings.Where(r => r.MatchId == match.Id))
+                { <p>ELO @Name(rating.PlayerId): @rating.Before ? @rating.After (@rating.Change.ToString("+0;-0;0"))</p> }
+            </article>
+        }
+    }
+</section>
+@code {
+    [Parameter] public int Id { get; set; }
+    [CascadingParameter] private HttpContext HttpContext { get; set; } = default!;
+    private LeagueSession? session;
+    private LeaguePlayer? me;
+    private LeagueRegistration? registration;
+    private bool admin;
+    private List<LeagueParticipation> entries = [];
+    private List<LeagueMatch> matches = [];
+    private List<LeagueRating> ratings = [];
+    private string Name(int id) => entries.FirstOrDefault(p => p.PlayerId == id)?.Player.User.UserName ?? "Spelare";
+    private string ActionLink(string action, int match = 0) => $"/ligan/atgard?action={action}&session={Id}&match={match}";
+    protected override async Task OnInitializedAsync()
+    {
+        admin = HttpContext.User.IsInRole(AccessLevels.Admin);
+        var userId = HttpContext.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        me = await Database.LeaguePlayers.AsNoTracking().SingleOrDefaultAsync(p => p.UserId == userId);
+        session = await Database.LeagueSessions.AsNoTracking().Include(s => s.Season).SingleOrDefaultAsync(s => s.Id == Id);
+        if (session is null) { HttpContext.Response.StatusCode = 404; return; }
+        registration = me is null ? null : await Database.LeagueRegistrations.AsNoTracking().SingleOrDefaultAsync(r => r.SeasonId == session.SeasonId && r.PlayerId == me.Id);
+        entries = await Database.LeagueParticipations.AsNoTracking().Include(p => p.Player).ThenInclude(p => p.User).Where(p => p.SessionId == Id).ToListAsync();
+        var playerId = me?.Id ?? 0;
+        matches = await Database.LeagueMatches.AsNoTracking().Where(m => m.SessionId == Id && (admin || m.PlayerOneId == playerId || m.PlayerTwoId == playerId)).ToListAsync();
+        var ids = matches.Select(m => m.Id).ToArray();
+        ratings = await Database.LeagueRatings.AsNoTracking().Where(r => ids.Contains(r.MatchId)).ToListAsync();
+    }
+}

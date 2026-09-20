@@ -1,0 +1,87 @@
+@page "/hantera/nyheter/ny"
+@page "/hantera/nyheter/{Id:int}"
+@inject ApplicationDbContext Database
+@inject NewsService News
+@inject NavigationManager Navigation
+
+<PageTitle>@(Id.HasValue ? "Redigera nyhet" : "Publicera nyhet")</PageTitle>
+<section class="account-panel news-editor">
+    <a href="/hantera">Till administrationen</a>
+    <h1>@(Id.HasValue ? "Redigera nyhet" : "Publicera nyhet")</h1>
+    @if (missing)
+    {
+        <p>Nyheten finns inte längre.</p>
+    }
+    else
+    {
+        <p>Nyheten visas direkt i arkivet. Den senast publicerade visas även på startsidan. Publiceringsdatum sätts automatiskt och behålls vid redigering.</p>
+        @if (error is not null) { <p role="alert" class="validation-message">@error</p> }
+        <EditForm Model="Input" method="post" enctype="multipart/form-data" FormName="news-edit" OnValidSubmit="Save">
+            <DataAnnotationsValidator />
+            <ValidationSummary role="alert" />
+            <input type="hidden" name="Input.Version" value="@Input.Version" />
+            <label for="news-title">Rubrik</label>
+            <InputText id="news-title" @bind-Value="Input.Title" maxlength="160" />
+            <label for="news-body">Nyhetstext</label>
+            <InputTextArea id="news-body" @bind-Value="Input.Body" rows="12" maxlength="20000" />
+            <input type="hidden" name="Input.ImageUrl" value="@Input.ImageUrl" />
+            @if (currentImage is not null)
+            {
+                <img class="news-image" src="@currentImage" alt="Nuvarande artikelbild" />
+                <label class="checkbox-label"><InputCheckbox @bind-Value="Input.RemoveImage" /> Ta bort nuvarande bild</label>
+            }
+            <label for="news-image">Ladda upp bild (valfritt)</label>
+            <input id="selected-image-name" type="hidden" name="Input.SelectedImageName" value="@Input.SelectedImageName" />
+            <input id="news-image" name="newsImage" type="file" accept="image/jpeg,image/png,image/gif,image/webp" aria-describedby="image-help"
+                   onchange="document.getElementById('selected-image-name').value = this.files[0]?.name || '';" />
+            @if (!string.IsNullOrEmpty(Input.SelectedImageName))
+            {
+                <p role="alert" class="validation-message">Välj bildfilen @Input.SelectedImageName igen innan du sparar. Webbläsaren tömmer filvalet när formuläret visas på nytt.</p>
+            }
+            <p id="image-help" class="field-help">Välj en bild från din enhet. JPEG, PNG, GIF eller WebP, högst 5 MB. En ny bild ersätter den nuvarande. Om formuläret inte kan sparas behöver du välja filen igen.</p>
+            <label for="news-alt">Bildbeskrivning</label>
+            <InputText id="news-alt" @bind-Value="Input.ImageDescription" maxlength="250" />
+            <label for="news-links">Länkar (valfritt, en per rad)</label>
+            <InputTextArea id="news-links" @bind-Value="Input.Links" rows="3" maxlength="10000" />
+            <button type="submit">@(Id.HasValue ? "Spara ändringar" : "Publicera nyhet")</button>
+            <a href="/nyheter">Avbryt</a>
+        </EditForm>
+    }
+</section>
+
+@code {
+    [Parameter] public int? Id { get; set; }
+    [CascadingParameter] private HttpContext HttpContext { get; set; } = default!;
+    [SupplyParameterFromForm] private NewsInput Input { get; set; } = default!;
+    private bool missing;
+    private string? error;
+    private string? currentImage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var article = Id.HasValue ? await Database.NewsArticles.AsNoTracking().SingleOrDefaultAsync(article => article.Id == Id) : null;
+        if (Id.HasValue && article is null) { missing = true; HttpContext.Response.StatusCode = 404; }
+        if (article?.EventId is int eventId) { Input ??= new(); Navigation.NavigateTo($"/hantera/evenemang/{eventId}", forceLoad: true); return; }
+        currentImage = article?.DisplayImageUrl;
+        Input ??= article is null ? new() : new NewsInput
+        {
+            Title = article.Title, Body = article.Body, ImageUrl = article.ImageUrl,
+            ImageDescription = article.ImageDescription, Links = article.Links, Version = article.Version
+        };
+        // Preserve the upload intent even when model validation prevents Save from running.
+        if (HttpMethods.IsPost(HttpContext.Request.Method))
+        {
+            var form = await HttpContext.Request.ReadFormAsync();
+            var image = form.Files.GetFile("newsImage");
+            if (image is { Length: > 0 }) Input.SelectedImageName = System.IO.Path.GetFileName(image.FileName);
+        }
+    }
+
+    private async Task Save()
+    {
+        var form = await HttpContext.Request.ReadFormAsync();
+        var result = await News.SaveAsync(HttpContext.User, Id, Input, form.Files.GetFile("newsImage"));
+        if (result.Succeeded) Navigation.NavigateTo("/nyheter", forceLoad: true);
+        else error = result.Message;
+    }
+}

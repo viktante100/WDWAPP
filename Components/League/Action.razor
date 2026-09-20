@@ -1,0 +1,102 @@
+@page "/ligan/atgard"
+@inject ApplicationDbContext Database
+@inject LeagueService League
+@inject NavigationManager Navigation
+<PageTitle>@title</PageTitle>
+<section class="account-panel">
+    <a href="/ligan">Till ligan</a>
+    @if (ActionName != "report") { <h1>@title</h1> }
+    @if (denied) { <p>Åtgärden är inte tillgänglig.</p> }
+    else
+    {
+        @if (error is not null) { <p role="alert" class="validation-message">@error</p> }
+        @if (currentMatch is not null) { <LeagueMatchSummary Match="currentMatch" One="@Name(currentMatch.PlayerOneId)" Two="@Name(currentMatch.PlayerTwoId)" /> }
+        <EditForm Model="Input" method="post" FormName="league-action" OnValidSubmit="Save">
+            <DataAnnotationsValidator /><ValidationSummary role="alert" />
+            <input type="hidden" name="Input.Action" value="@Input.Action" />
+            <input type="hidden" name="Input.SeasonId" value="@Input.SeasonId" />
+            <input type="hidden" name="Input.SessionId" value="@Input.SessionId" />
+            <input type="hidden" name="Input.MatchId" value="@Input.MatchId" />
+            <input type="hidden" name="Input.Version" value="@Input.Version" />
+            @if (ActionName == "enroll") { <p>Anmäl dig till <strong>@currentSeason?.Title</strong>. Din ELO följer med, men poäng och matchstatistik börjar på noll i den här ligan.</p> }
+            @if (ActionName == "delete-season")
+            {
+                <p>Radera <strong>@currentSeason?.Title</strong> permanent? Alla omgångar, matcher, WO och all statistik för ligan tas bort. ELO räknas om från kvarvarande ligor, även för senare säsonger.</p>
+                <p>Spelarkonton och administrativ ändringslogg behålls. Åtgärden kan inte ångras.</p>
+                <label class="checkbox-label"><InputCheckbox @bind-Value="Input.Confirmed" /> Jag bekräftar att ligan och dess statistik ska raderas permanent.</label>
+            }
+            @if (ActionName == "create-season")
+            {
+                <label for="season-year">År</label><InputNumber id="season-year" @bind-Value="Input.Year" min="1" max="9999" />
+                <label for="season-term">Termin</label><InputSelect id="season-term" @bind-Value="Input.Term"><option value="Spring">Vårterminen</option><option value="Autumn">Höstterminen</option></InputSelect>
+                <p>ELO följer med från tidigare ligor. Poäng och matchstatistik börjar om från noll.</p>
+            }
+            @if (ActionName == "close-season") { <p>Avsluta @currentSeason?.Title? Alla omgångar måste vara slutförda eller inställda. Resultaten sparas och ELO följer med till nästa liga.</p> }
+            @if (ActionName is "create" or "date")
+            { <label for="round-date">Datum (svensk tid)</label><InputDate id="round-date" @bind-Value="Input.Date" /> }
+            @if (ActionName == "report")
+            {
+                @if (admin)
+                { <label for="player-one">Spelare 1</label><InputSelect id="player-one" @bind-Value="Input.PlayerId"><option value="0">Välj spelare</option>@foreach (var p in available) { <option value="@p.PlayerId">@p.Player.User.UserName</option> }</InputSelect> }
+                <label for="opponent">@(admin ? "Spelare 2" : "Motståndare (du är spelare 1)")</label>
+                <InputSelect id="opponent" @bind-Value="Input.OpponentId"><option value="0">Välj motståndare</option>@foreach (var p in available.Where(p => p.Player.UserId != HttpContext.User.FindFirstValue(ClaimTypes.NameIdentifier) && (!admin || p.PlayerId != Input.PlayerId))) { <option value="@p.PlayerId">@p.Player.User.UserName</option> }</InputSelect>
+            }
+            else { <input type="hidden" name="Input.PlayerId" value="@Input.PlayerId" /> }
+            @if (ActionName is "report" or "edit")
+            {
+                <label for="faction-one">Faction – spelare 1 @(currentMatch is null ? "" : Name(currentMatch.PlayerOneId))</label>
+                <InputText id="faction-one" @bind-Value="Input.PlayerOneFaction" maxlength="100" />
+                <label for="points-one">Matchpoäng – spelare 1</label><InputNumber id="points-one" @bind-Value="Input.PlayerOnePoints" min="0" />
+                <label for="faction-two">Faction – spelare 2 @(currentMatch is null ? "" : Name(currentMatch.PlayerTwoId))</label>
+                <InputText id="faction-two" @bind-Value="Input.PlayerTwoFaction" maxlength="100" />
+                <label for="points-two">Matchpoäng – spelare 2</label><InputNumber id="points-two" @bind-Value="Input.PlayerTwoPoints" min="0" />
+            }
+            @if (ActionName is "cancel" or "reopen" or "delete") { <p>Bekräfta ändringen. Tabell och eventuell historisk ELO räknas om.</p> }
+            @if (ActionName is "bye" or "remove-bye") { <p>Spelare: @Name(PlayerId). WO ger 3 poäng men påverkar inte matcher, W/D/L, PPM eller ELO.</p> }
+            <button type="submit">@title</button>
+        </EditForm>
+    }
+</section>
+@code {
+    [SupplyParameterFromQuery(Name = "action")] public string ActionName { get; set; } = "";
+    [SupplyParameterFromQuery(Name = "session")] public int SessionId { get; set; }
+    [SupplyParameterFromQuery(Name = "match")] public int MatchId { get; set; }
+    [SupplyParameterFromQuery(Name = "player")] public int PlayerId { get; set; }
+    [SupplyParameterFromQuery(Name = "season")] public int SeasonId { get; set; }
+    [SupplyParameterFromForm] private LeagueCommand Input { get; set; } = default!;
+    [CascadingParameter] private HttpContext HttpContext { get; set; } = default!;
+    private bool admin, denied;
+    private string? error;
+    private LeagueMatch? currentMatch;
+    private LeagueSeason? currentSeason;
+    private List<LeagueParticipation> entries = [], available = [];
+    private string Name(int id) => entries.FirstOrDefault(p => p.PlayerId == id)?.Player.User.UserName ?? "Spelare";
+    private string title => ActionName switch { "delete-season" => "Radera liga", "create-season" => "Skapa liga", "close-season" => "Avsluta liga", "enroll" => "Gå med i ligan", "join" => "Anmäl mig", "create" => "Skapa omgång", "date" => "Spara datum", "finalize" => "Slutför omgång", "cancel" => "Ställ in omgång", "reopen" => "Öppna omgång", "report" => "Rapportera match", "edit" => "Spara resultat", "confirm" => "Bekräfta resultat", "dispute" => "Bestrid resultat", "delete" => "Ta bort match", "bye" => "Tilldela WO", "remove-bye" => "Ta bort WO", _ => "Ogiltig åtgärd" };
+    protected override async Task OnInitializedAsync()
+    {
+        admin = HttpContext.User.IsInRole(AccessLevels.Admin);
+        if (!admin && ActionName is "delete-season" or "create-season" or "close-season" or "create" or "date" or "finalize" or "cancel" or "reopen" or "delete" or "bye" or "remove-bye") denied = true;
+        currentSeason = await Database.LeagueSeasons.AsNoTracking().SingleOrDefaultAsync(s => s.Id == SeasonId);
+        var session = await Database.LeagueSessions.AsNoTracking().SingleOrDefaultAsync(s => s.Id == SessionId);
+        entries = await Database.LeagueParticipations.AsNoTracking().Include(p => p.Player).ThenInclude(p => p.User).Where(p => p.SessionId == SessionId).ToListAsync();
+        available = entries.Where(p => !p.IsBye && p.MatchId is null).ToList();
+        currentMatch = await Database.LeagueMatches.AsNoTracking().SingleOrDefaultAsync(m => m.Id == MatchId && m.SessionId == SessionId);
+        if (currentMatch is not null && !admin)
+        {
+            var uid = HttpContext.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (!entries.Any(p => p.Player.UserId == uid && (p.PlayerId == currentMatch.PlayerOneId || p.PlayerId == currentMatch.PlayerTwoId))) denied = true;
+        }
+        if (denied) { currentMatch = null; HttpContext.Response.StatusCode = 403; }
+        Input ??= new() { Action = ActionName, SeasonId = SeasonId, SessionId = SessionId, MatchId = MatchId, PlayerId = PlayerId,
+            PlayerOneFaction = currentMatch?.PlayerOneFaction, PlayerTwoFaction = currentMatch?.PlayerTwoFaction,
+            PlayerOnePoints = currentMatch?.PlayerOnePoints, PlayerTwoPoints = currentMatch?.PlayerTwoPoints,
+            Version = currentMatch?.Version ?? session?.Version ?? currentSeason?.Version ?? "", Date = session?.Date, Outcome = currentMatch?.Outcome ?? LeagueOutcome.PlayerOneWin };
+    }
+    private async Task Save()
+    {
+        if (denied) return;
+        var result = await League.ExecuteAsync(HttpContext.User, Input);
+        if (result.Succeeded) Navigation.NavigateTo(Input.Action is "delete-season" or "create-season" or "close-season" ? "/hantera/ligan" : admin && Input.SessionId != 0 ? $"/ligan/omgang/{Input.SessionId}" : "/ligan", forceLoad: true);
+        else error = result.Message;
+    }
+}

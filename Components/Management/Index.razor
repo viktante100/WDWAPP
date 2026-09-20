@@ -1,0 +1,26 @@
+@page "/hantera"
+
+<PageTitle>Admin / Keymember</PageTitle>
+<section class="news-section">
+    <h1>Admin / Keymember</h1>
+    <div class="admin-users">
+        <article class="news-content red-border">
+            <h2>Evenemang och kalender</h2>
+            <p>Skapa evenemang, uppdatera kalendern och publicera evenemang som nyheter.</p>
+            <div class="news-actions"><a href="/hantera/evenemang/ny">Skapa evenemang</a><a href="/hantera/evenemang">Hantera evenemang</a></div>
+        </article>
+        <article class="news-content red-border">
+            <h2>Nyheter</h2>
+            <p>Publicera nyheter eller redigera och ta bort tidigare artiklar.</p>
+            <div class="news-actions"><a href="/hantera/nyheter/ny">Publicera nyhet</a><a href="/nyheter">Hantera nyheter</a></div>
+        </article>
+        <AuthorizeView Policy="@AccessLevels.Admin">
+            <article class="news-content red-border"><h2>40K-ligan</h2><p>Omgångar, resultat, WO och ELO.</p><a href="/hantera/ligan">Hantera ligan</a></article>
+            <article class="news-content red-border">
+                <h2>Användare</h2>
+                <p>Hantera konton och behörigheter.</p>
+                <a href="/admin">Hantera användare</a>
+            </article>
+        </AuthorizeView>
+    </div>
+</section>

@@ -1,0 +1,107 @@
+@page "/marknad/ny"
+@page "/marknad/{Id:int}/redigera"
+@attribute [Authorize]
+@inject ApplicationDbContext Database
+@inject AdvertisementService Advertisements
+@inject NavigationManager Navigation
+@inject Microsoft.AspNetCore.Authorization.IAuthorizationService Authorization
+
+<PageTitle>@(Id.HasValue ? "Redigera annons" : "Ny annons")</PageTitle>
+<section class="account-panel news-editor market-editor">
+    <a href="/marknad">Till Marknad</a><h1>@(Id.HasValue ? "Redigera annons" : "Ny annons")</h1>
+    @if (!allowed) { <p>Annonsen saknas eller du saknar behörighet. Medlemskap krävs för att skapa annonser.</p> }
+    else if (expired) { <p>Annonsen har gått ut och kan inte redigeras.</p><a href="/marknad/@Id/radera">Ta bort annonsen</a> }
+    else
+    {
+        @if (error is not null) { <p class="validation-message" role="alert">@error</p> }
+        <EditForm Model="Input" method="post" enctype="multipart/form-data" FormName="advertisement-edit" OnValidSubmit="Save">
+            <DataAnnotationsValidator /><ValidationSummary role="alert" />
+            <input type="hidden" name="Input.Version" value="@Input.Version" />
+            <label for="ad-title">Rubrik</label><InputText id="ad-title" @bind-Value="Input.Title" maxlength="160" required />
+            <label for="ad-type">Annonstyp</label><InputSelect id="ad-type" @bind-Value="Input.Type">
+                @foreach (var type in Enum.GetValues<AdvertisementType>()) { <option value="@type">@AdvertisementLabels.Type(type)</option> }
+            </InputSelect>
+            <label for="ad-description">Beskrivning</label><InputTextArea id="ad-description" @bind-Value="Input.Description" maxlength="10000" rows="8" required />
+            <fieldset><legend>Bilder (valfritt)</legend>
+                @if (images.Count > 0)
+                {
+                    <div class="market-edit-images">
+                        @foreach (var image in images)
+                        {
+                            <label><img src="/marknad/bilder/@image.Id" alt="Befintlig annonsbild" width="150" height="100" />
+                                <span><input type="checkbox" name="Input.RemoveImageIds" value="@image.Id" checked="@Input.RemoveImageIds.Contains(image.Id)" /> Ta bort</span></label>
+                        }
+                    </div>
+                }
+                <label for="ad-images">Lägg till bilder</label><input id="ad-images" type="file" name="advertisementImages" multiple accept="image/jpeg,image/png,image/gif,image/webp" data-market-upload data-existing-count="@images.Count" aria-describedby="ad-image-help ad-image-status" />
+                <p id="ad-image-help" class="field-help">Högst 10 bilder totalt. JPEG, PNG, GIF eller WebP, högst 5 MB per bild. Du kan välja flera bilder samtidigt eller lägga till fler i flera steg. Befintliga bilder behålls om du inte markerar dem för borttagning.</p>
+                <p id="ad-image-status" class="field-help" data-upload-status role="status" aria-live="polite"></p>
+                <ul class="market-upload-list" data-upload-list aria-label="Bilder att ladda upp"></ul>
+                @if (postedWithImages) { <p class="field-help" role="status">Välj bildfilerna igen innan du sparar. Webbläsaren tömmer filvalet när formuläret visas på nytt.</p> }
+            </fieldset>
+            <fieldset><legend>Kontaktsätt</legend><p>Välj minst ett alternativ.</p>
+                <div class="ad-contact-option" onchange="this.querySelector('[data-contact-value]').required = this.querySelector('input[type=checkbox]').checked">
+                    <label class="checkbox-label"><InputCheckbox @bind-Value="Input.EmailSelected" /> E-post</label>
+                    <div class="ad-contact-value"><label for="ad-Email">E-postadress</label><InputText id="ad-Email" type="email" @bind-Value="Input.Email" maxlength="254" data-contact-value required="@Input.EmailSelected" /></div>
+                </div>
+                <div class="ad-contact-option" onchange="this.querySelector('[data-contact-value]').required = this.querySelector('input[type=checkbox]').checked">
+                    <label class="checkbox-label"><InputCheckbox @bind-Value="Input.PhoneSelected" /> Telefon</label>
+                    <div class="ad-contact-value"><label for="ad-Phone">Telefonnummer</label><InputText id="ad-Phone" type="tel" @bind-Value="Input.Phone" maxlength="50" data-contact-value required="@Input.PhoneSelected" /></div>
+                </div>
+                <div class="ad-contact-option" onchange="this.querySelector('[data-contact-value]').required = this.querySelector('input[type=checkbox]').checked">
+                    <label class="checkbox-label"><InputCheckbox @bind-Value="Input.SmsSelected" /> Telefon – endast SMS</label>
+                    <div class="ad-contact-value"><label for="ad-Sms">Telefonnummer för SMS</label><InputText id="ad-Sms" type="tel" @bind-Value="Input.Sms" maxlength="50" data-contact-value required="@Input.SmsSelected" /></div>
+                </div>
+                <div class="ad-contact-option" onchange="this.querySelector('[data-contact-value]').required = this.querySelector('input[type=checkbox]').checked">
+                    <label class="checkbox-label"><InputCheckbox @bind-Value="Input.MessengerSelected" /> Facebook Messenger</label>
+                    <div class="ad-contact-value"><label for="ad-Messenger">Messenger-namn eller profilinformation</label><InputText id="ad-Messenger" type="text" @bind-Value="Input.Messenger" maxlength="254" data-contact-value required="@Input.MessengerSelected" /></div>
+                </div>
+                <div class="ad-contact-option" onchange="this.querySelector('[data-contact-value]').required = this.querySelector('input[type=checkbox]').checked">
+                    <label class="checkbox-label"><InputCheckbox @bind-Value="Input.DiscordSelected" /> Discord</label>
+                    <div class="ad-contact-value"><label for="ad-Discord">Discord-användarnamn</label><InputText id="ad-Discord" type="text" @bind-Value="Input.Discord" maxlength="254" data-contact-value required="@Input.DiscordSelected" /></div>
+                </div>
+                <label class="checkbox-label"><InputCheckbox @bind-Value="Input.AtVenueSelected" /> I lokalen</label>
+            </fieldset>
+            <p class="field-help">Kontaktuppgifterna visas för inloggade personer på sidan.<br />Annonsen tas automatiskt bort två månader efter publicering.</p>
+            @if (expiresAt.HasValue) { <p class="field-help">Visas till @expiresAt.Value.ToString("yyyy-MM-dd"). Redigering förlänger inte publiceringen.</p> }
+            <button type="submit">@(Id.HasValue ? "Spara ändringar" : "Publicera annons")</button><a href="/marknad">Avbryt</a>
+        </EditForm>
+        @if (Id.HasValue) { <p><a href="/marknad/@Id/radera">Ta bort annonsen</a></p> }
+    }
+</section>
+@code {
+    [Parameter] public int? Id { get; set; }
+    [CascadingParameter] private HttpContext HttpContext { get; set; } = default!;
+    [SupplyParameterFromForm] private AdvertisementInput Input { get; set; } = default!;
+    private bool allowed, expired, postedWithImages;
+    private string? error;
+    private DateTime? expiresAt;
+    private List<AdvertisementImage> images = [];
+    protected override async Task OnInitializedAsync()
+    {
+        HttpContext.Response.Headers.CacheControl = "no-store";
+        var ad = Id.HasValue ? await Database.Advertisements.AsNoTracking().Include(a => a.Contacts).SingleOrDefaultAsync(a => a.Id == Id) : null;
+        allowed = Id.HasValue ? ad is not null && await Advertisements.CanEditAsync(HttpContext.User, ad)
+            : (await Authorization.AuthorizeAsync(HttpContext.User, AccessLevels.Member)).Succeeded;
+        if (!allowed) { HttpContext.Response.StatusCode = Id.HasValue && ad is null ? 404 : 403; return; }
+        expired = ad is not null && ad.ExpiresAt <= Advertisements.UtcNow;
+        expiresAt = ad?.ExpiresAt;
+        Input ??= ad is null ? new() : AdvertisementInput.From(ad);
+        Input.RemoveImageIds ??= [];
+        if (ad is not null && !expired) images = await Advertisements.ImagesAsync(ad.Id);
+        if (HttpMethods.IsPost(HttpContext.Request.Method))
+        {
+            var form = await HttpContext.Request.ReadFormAsync();
+            postedWithImages = form.Files.Any(f => !string.IsNullOrEmpty(f.FileName));
+        }
+    }
+    private async Task Save()
+    {
+        if (!allowed || expired) return;
+        var form = await HttpContext.Request.ReadFormAsync();
+        var files = form.Files.GetFiles("advertisementImages").Where(f => f.Length > 0 || !string.IsNullOrEmpty(f.FileName)).ToList();
+        var result = await Advertisements.SaveAsync(HttpContext.User, Id, Input, files);
+        if (result.Succeeded) Navigation.NavigateTo($"/marknad/{result.Id}", forceLoad: true);
+        else error = result.Message;
+    }
+}

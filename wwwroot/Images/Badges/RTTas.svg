@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Transparent background -->
+  <!-- Handles -->
+  <path d="M18 13H9v6c0 9 5 15 14 16"
+        fill="none" stroke="#633819" stroke-width="3.5"
+        stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M46 13h9v6c0 9-5 15-14 16"
+        fill="none" stroke="#633819" stroke-width="3.5"
+        stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Cup -->
+  <path d="M18 8h28v10c0 11-5.8 19.2-14 22
+           -8.2-2.8-14-11-14-22V8Z"
+        fill="#B87333" stroke="#633819" stroke-width="3"
+        stroke-linejoin="round"/>
+
+  <!-- Simple highlight -->
+  <path d="M23 12h6v13c0 4 1.2 7.2 3 9.5
+           -5.3-2.7-9-8.7-9-16.5V12Z"
+        fill="#D69A5B" opacity="0.9"/>
+
+  <!-- Stem -->
+  <path d="M29 39h6v10h-6Z"
+        fill="#B87333" stroke="#633819" stroke-width="3"/>
+
+  <!-- Base -->
+  <path d="M23 48h18l4 8H19l4-8Z"
+        fill="#9B5728" stroke="#633819" stroke-width="3"
+        stroke-linejoin="round"/>
+</svg>

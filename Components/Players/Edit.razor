@@ -1,0 +1,98 @@
+@page "/spelare/ny"
+@page "/spelare/{Id:int}/redigera"
+@attribute [Authorize]
+@inject ApplicationDbContext Database
+@inject PlayerProfileService Profiles
+@inject NavigationManager Navigation
+@inject Microsoft.AspNetCore.Authorization.IAuthorizationService Authorization
+
+<PageTitle>@(Id.HasValue ? "Redigera profil" : "Skapa spelarprofil")</PageTitle>
+<section class="account-panel news-editor">
+    <a href="/spelare">Alla spelare</a><h1>@(Id.HasValue ? "Redigera profil" : "Skapa spelarprofil")</h1>
+    @if (!allowed) { <p>Profilen saknas eller du saknar behörighet.</p> }
+    else
+    {
+        @if (error is not null) { <p class="validation-message" role="alert">@error</p> }
+        <EditForm Model="Input" method="post" enctype="multipart/form-data" FormName="player-edit" OnValidSubmit="Save">
+            <DataAnnotationsValidator /><ValidationSummary role="alert" />
+            <input type="hidden" name="Input.Version" value="@Input.Version" />
+            <p>Namnet hämtas från spelarens kontoprofil: <strong>@accountName</strong></p>
+            <label class="checkbox-label"><InputCheckbox @bind-Value="Input.FirstNameOnly" /> Visa endast förnamn</label>
+            <label for="player-nickname">Smeknamn (valfritt)</label><InputText id="player-nickname" @bind-Value="Input.Nickname" maxlength="100" />
+            @* Sverigeranking är dold tills vidare. *@
+            <fieldset data-player-image-editor data-original-image="@currentImage"><legend>Profilbild</legend>
+                <InputRadioGroup @bind-Value="Input.Avatar"><div class="avatar-options">
+                    @foreach (var avatar in PlayerProfileService.Avatars)
+                    { <label><InputRadio Value="@avatar" /><img src="/Images/avatars/@(avatar).svg" alt="@AvatarLabel(avatar)" width="64" height="64" /></label> }
+                </div></InputRadioGroup>
+                @if (currentImage is not null)
+                { <label class="checkbox-label"><InputCheckbox @bind-Value="Input.RemoveImage" /> Ta bort uppladdad bild och använd vald standardbild</label> }
+                <label for="player-image">Ladda upp egen bild</label><input type="file" name="playerImage" id="player-image" accept="image/jpeg,image/png,image/gif,image/webp" />
+                <div class="player-image-preview">
+                    <PlayerPortrait Source="@(currentImage ?? $"/Images/avatars/{Input.Avatar}.svg")" Alt="Förhandsvisning av profilbild" Zoom="Input.ImageZoom" X="Input.ImageX" Y="Input.ImageY" />
+                    <p class="field-help">Så här visas bilden på spelarprofilen. Dra bilden för att välja utsnitt, eller använd reglagen.</p>
+                </div>
+                <label for="portrait-zoom">Zoom</label><input id="portrait-zoom" name="Input.ImageZoom" type="range" min="1" max="4" step="0.01" value="@Invariant(Input.ImageZoom)" data-portrait-zoom />
+                <label for="portrait-x">Vågrätt läge</label><input id="portrait-x" name="Input.ImageX" type="range" min="0" max="100" step="0.01" value="@Invariant(Input.ImageX)" data-portrait-x />
+                <label for="portrait-y">Lodrätt läge</label><input id="portrait-y" name="Input.ImageY" type="range" min="0" max="100" step="0.01" value="@Invariant(Input.ImageY)" data-portrait-y />
+                <p class="field-help">JPEG, PNG, GIF eller WebP, högst 5 MB. Ny uppladdning ersätter bilden. Om formuläret visas igen behöver du välja filen på nytt.</p>
+            </fieldset>
+            <fieldset><legend>Titlar</legend><p>Fyll i antal vinster. Kategorier med 0 visas inte offentligt.</p>
+                <label for="league-wins">40K-ligan</label><InputNumber id="league-wins" @bind-Value="Input.LeagueWins" min="0" max="10000" />
+                <label for="rtt-wins">WDW RTT</label><InputNumber id="rtt-wins" @bind-Value="Input.RttWins" min="0" max="10000" />
+                <label for="championship-wins">Ligamästerskap</label><InputNumber id="championship-wins" @bind-Value="Input.ChampionshipWins" min="0" max="10000" />
+            </fieldset>
+            <button type="submit">Spara profil</button>
+        </EditForm>
+        @if (Id.HasValue) { <p><a href="/spelare/@Id/radera">Radera profil</a></p> }
+    }
+</section>
+@code {
+    [Parameter] public int? Id { get; set; }
+    [CascadingParameter] private HttpContext HttpContext { get; set; } = default!;
+    [SupplyParameterFromForm] private PlayerProfileInput Input { get; set; } = default!;
+    private bool allowed;
+    private string? error, currentImage, accountName;
+    private static string Invariant(double value) => value.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    private static string AvatarLabel(string avatar) => avatar switch { "person-circle" => "Person i cirkel", "person-fill" => "Silhuett", _ => "Frågetecken" };
+    protected override async Task OnInitializedAsync()
+    {
+        var profile = Id.HasValue ? await Database.PlayerProfiles.AsNoTracking().SingleOrDefaultAsync(p => p.Id == Id) : null;
+        allowed = Id.HasValue ? profile is not null && await Profiles.CanEditAsync(HttpContext.User, profile)
+            : (await Authorization.AuthorizeAsync(HttpContext.User, AccessLevels.Member)).Succeeded;
+        if (!allowed) HttpContext.Response.StatusCode = profile is null && Id.HasValue ? 404 : 403;
+        if (!Id.HasValue && allowed)
+        {
+            var userId = HttpContext.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var existing = await Database.PlayerProfiles.Where(p => p.UserId == userId).Select(p => (int?)p.Id).SingleOrDefaultAsync();
+            if (existing.HasValue) { Navigation.NavigateTo($"/spelare/{existing}/redigera"); return; }
+        }
+        if (allowed)
+        {
+            var ownerId = profile?.UserId ?? HttpContext.User.FindFirstValue(ClaimTypes.NameIdentifier);
+            accountName = await Database.Users.Where(u => u.Id == ownerId).Select(u => u.FullName ?? u.UserName).SingleOrDefaultAsync();
+        }
+        currentImage = profile?.ImageData is not null ? profile.ImageUrl : null;
+        Input ??= profile is null ? new() : new() { FirstNameOnly = profile.FirstNameOnly, ImageZoom = profile.ImageZoom, ImageX = profile.ImageX, ImageY = profile.ImageY, Nickname = profile.Nickname,
+            VeizlaIdentity = profile.VeizlaIdentity, Avatar = profile.Avatar, Version = profile.Version,
+            LeagueWins = profile.SelfReportedTitles.LeagueWins, RttWins = profile.SelfReportedTitles.RttWins, ChampionshipWins = profile.SelfReportedTitles.ChampionshipWins };
+        if (HttpMethods.IsPost(HttpContext.Request.Method))
+        {
+            // Disabled avatar controls are not posted. Restore their defaults before validation;
+            // explicitly posted invalid values must still be rejected.
+            var form = await HttpContext.Request.ReadFormAsync();
+            if (!form.ContainsKey("Input.ImageZoom")) Input.ImageZoom = 1;
+            if (!form.ContainsKey("Input.ImageX")) Input.ImageX = 50;
+            if (!form.ContainsKey("Input.ImageY")) Input.ImageY = 25;
+        }
+    }
+    private async Task Save()
+    {
+        if (!allowed) return;
+        var form = await HttpContext.Request.ReadFormAsync();
+        var image = form.Files.GetFile("playerImage");
+        var result = await Profiles.SaveAsync(HttpContext.User, Id, Input, image is { Length: > 0 } ? image : null);
+        if (result.Succeeded) Navigation.NavigateTo($"/spelare/{result.Id}", forceLoad: true);
+        else error = result.Message;
+    }
+}

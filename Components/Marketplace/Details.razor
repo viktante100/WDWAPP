@@ -1,0 +1,19 @@
+@page "/marknad/{Id:int}"
+@inject AdvertisementService Advertisements
+@inject NavigationManager Navigation
+
+<PageTitle>Marknad</PageTitle>
+<section class="market-section"><h1>Annonsen saknas eller har gått ut</h1><a href="/marknad">Till Marknad</a></section>
+@code {
+    [Parameter] public int Id { get; set; }
+    [CascadingParameter] private HttpContext HttpContext { get; set; } = default!;
+    protected override async Task OnInitializedAsync()
+    {
+        HttpContext.Response.Headers.CacheControl = "no-store";
+        var ad = await Advertisements.PublicAsync(Id);
+        if (ad is null) { HttpContext.Response.StatusCode = 404; return; }
+        // Preserve old links and send the reader to the correct page/card instead of a separate detail page.
+        var ahead = await Advertisements.Active().CountAsync(a => a.CreatedAt > ad.CreatedAt || (a.CreatedAt == ad.CreatedAt && a.Id > Id));
+        Navigation.NavigateTo($"/marknad?Page={ahead / AdvertisementService.PageSize + 1}#annons-{Id}", forceLoad: true);
+    }
+}

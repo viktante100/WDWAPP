@@ -1,0 +1,54 @@
+@page "/"
+
+@attribute [ExcludeFromInteractiveRouting]
+@using Microsoft.EntityFrameworkCore
+@using WDWAPP.Data
+@inject ApplicationDbContext Database
+
+<PageTitle>Wermland Dice Warriors</PageTitle>
+<section class="news-section news-home">
+    @if (latest is null)
+    {
+        <div class="news-card red-border news-content">
+            <h2>På gång hos WDW</h2>
+            <p>Här kommer nyheter om ligor, turneringar och livet i föreningen. Håll utkik!</p>
+            <a href="/nyheter">Till nyhetsarkivet →</a>
+        </div>
+    }
+    else
+    {
+        <a class="news-card red-border news-preview" href="@($"/nyheter#nyhet-{latest.Id}")">
+            @if (latest.DisplayImageUrl is not null)
+            {
+                <div class="news-image-frame"><img class="news-image" src="@latest.DisplayImageUrl" alt="@latest.DisplayImageDescription" referrerpolicy="no-referrer" /></div>
+            }
+            <div class="news-content">
+                <NewsDate Utc="latest.PublishedUtc" />
+                @if (latest.Event is not null) { <EventDate Item="latest.Event" /> }
+                <h2>@latest.DisplayTitle</h2>
+                <p class="news-excerpt">@(latest.DisplayBody.Length > 240 ? latest.DisplayBody[..240] + "…" : latest.DisplayBody)</p>
+                <span class="news-read-more">Läs hela nyheten →</span>
+            </div>
+        </a>
+    }
+</section>
+
+<div class="link-list"> 
+
+<LinkCard Image="/Images/openinghours.jpg" Text="Kalender" Href="/kalender" />
+
+<LinkCard Image="/Images/40kligan.jpg" Text="40K-ligan" Href="/ligan" />
+
+<LinkCard Image="/Images/booking.jpg" Text="Boka match" Href="/sok-match" />
+
+    <LinkCard Image="/Images/players.jpg" Text="Spelare" Href="/spelare" />
+
+<LinkCard Image="/Images/events.jpg" Text="Marknad" Href="/marknad" />
+
+</div>
+
+@code {
+    private NewsArticle? latest;
+    protected override async Task OnInitializedAsync() => latest = await Database.NewsArticles.AsNoTracking()
+        .OrderByDescending(article => article.PublishedUtc).ThenByDescending(article => article.Id).FirstOrDefaultAsync();
+}

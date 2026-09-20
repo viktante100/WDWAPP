@@ -1,0 +1,15 @@
+@page "/spelare/{Id:int}"
+@inject ApplicationDbContext Database
+@inject NavigationManager Navigation
+
+<PageTitle>Spelare</PageTitle>
+<section class="player-section"><h1>Spelaren saknas</h1><a href="/spelare">Alla spelare</a></section>
+@code {
+    [Parameter] public int Id { get; set; }
+    [CascadingParameter] private HttpContext HttpContext { get; set; } = default!;
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await Database.PlayerProfiles.AnyAsync(p => p.Id == Id)) { HttpContext.Response.StatusCode = 404; return; }
+        Navigation.NavigateTo($"/spelare#spelare-{Id}", forceLoad: true);
+    }
+}

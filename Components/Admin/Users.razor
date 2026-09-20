@@ -1,0 +1,63 @@
+@page "/admin"
+@inject ApplicationDbContext Database
+
+<PageTitle>Admin – användare</PageTitle>
+<h1>Admin</h1>
+<a href="/hantera">Till Admin / Keymember</a>
+<p>Visa och redigera användaruppgifter, behörighet och konton.</p>
+<p><a class="member-list-button" href="/admin/medlemmar">Visa medlemslista</a></p>
+@if (Status == "details-updated") { <p role="status">Användaruppgifterna har uppdaterats.</p> }
+@if (Status == "updated") { <p role="status">Behörigheten har uppdaterats.</p> }
+@if (Status == "deleted") { <p role="status">Kontot har tagits bort.</p> }
+
+<form method="get" action="/admin" class="admin-search">
+    <label for="user-search">Sök namn eller e-post</label>
+    <input id="user-search" name="Search" value="@Search" type="search" maxlength="128" />
+    <button type="submit">Sök</button>
+</form>
+<h2>Användare (@total)</h2>
+<div class="admin-users">
+    @foreach (var user in users)
+    {
+        <article class="admin-user">
+            <h3>@(string.IsNullOrWhiteSpace(user.FullName) ? "Namn saknas" : user.FullName)</h3>
+            <p>@user.Email</p>
+            <a href="@($"/admin/users/{user.Id}")">Hantera <span class="visually-hidden">@(user.FullName ?? user.Email)</span></a>
+        </article>
+    }
+</div>
+@if (total == 0) { <p>Inga användare hittades.</p> }
+<nav class="admin-pagination" aria-label="Användarlistans sidor">
+    @if (currentPage > 1) { <a href="@PageLink(currentPage - 1)">Föregående</a> }
+    <span>Sida @currentPage av @pageCount</span>
+    @if (currentPage < pageCount) { <a href="@PageLink(currentPage + 1)">Nästa</a> }
+</nav>
+
+@code {
+    [SupplyParameterFromQuery] public string? Search { get; set; }
+    [SupplyParameterFromQuery] public int PageNumber { get; set; } = 1;
+    [SupplyParameterFromQuery] public string? Status { get; set; }
+    private sealed record UserRow(string Id, string? FullName, string? Email);
+    private List<UserRow> users = [];
+    private int total, currentPage, pageCount;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Filter in .NET so Swedish letters have the same case-insensitive behavior as other names.
+        IEnumerable<UserRow> query = await Database.Users.AsNoTracking()
+            .Select(user => new UserRow(user.Id, user.FullName, user.Email)).ToListAsync();
+        if (!string.IsNullOrWhiteSpace(Search))
+        {
+            var search = Search.Trim();
+            query = query.Where(user => (user.FullName?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false)
+                || (user.Email?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false));
+        }
+        var matchingUsers = query.OrderBy(user => user.FullName, StringComparer.Create(new System.Globalization.CultureInfo("sv-SE"), true))
+            .ThenBy(user => user.Id).ToList();
+        total = matchingUsers.Count;
+        pageCount = Math.Max(1, (int)Math.Ceiling(total / 25d));
+        currentPage = Math.Clamp(PageNumber, 1, pageCount);
+        users = matchingUsers.Skip((currentPage - 1) * 25).Take(25).ToList();
+    }
+    private string PageLink(int page) => $"/admin?PageNumber={page}&Search={Uri.EscapeDataString(Search ?? "")}";
+}

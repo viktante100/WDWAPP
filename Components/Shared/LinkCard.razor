@@ -1,0 +1,21 @@
+<a href="@Href" class="link-card red-border">
+
+<img src="@Image" alt="@Text" />
+
+<span class="link-card-text">@Text</span>
+
+</a>
+
+@code {
+
+[Parameter]
+public string Image { get; set; } = "";
+
+[Parameter]
+public string Text { get; set; } = "";
+
+[Parameter]
+public string Href { get; set; } = "";
+
+}
+

@@ -1,0 +1,97 @@
+@page "/register"
+@inject UserManager<ApplicationUser> UserManager
+@inject SignInManager<ApplicationUser> SignInManager
+@inject NavigationManager Navigation
+
+<PageTitle>Skapa konto</PageTitle>
+<section class="account-panel">
+    <h1>Skapa konto</h1>
+    <p>Välj ett nickname som visas på sidan. Du loggar in med din e-postadress.</p>
+    @if (errors.Count > 0)
+    {
+        <ul class="validation-message" role="alert">
+            @foreach (var error in errors) { <li>@error</li> }
+        </ul>
+    }
+    <EditForm Model="Input" method="post" FormName="register" OnValidSubmit="RegisterUser">
+        <DataAnnotationsValidator />
+        <ValidationSummary role="alert" />
+        <label for="nickname">Nickname</label>
+        <InputText id="nickname" @bind-Value="Input.Nickname" autocomplete="nickname" minlength="2" maxlength="32" required />
+        <label for="full-name">Namn</label>
+        <InputText id="full-name" @bind-Value="Input.FullName" autocomplete="name" maxlength="100" required />
+        <label for="address">Adress</label>
+        <InputText id="address" @bind-Value="Input.Address" autocomplete="street-address" maxlength="200" required />
+        <label for="postal-code">Postnummer</label>
+        <InputText id="postal-code" @bind-Value="Input.PostalCode" autocomplete="postal-code" inputmode="numeric" maxlength="6" placeholder="123 45" required />
+        <label for="city">Postort</label>
+        <InputText id="city" @bind-Value="Input.City" autocomplete="address-level2" maxlength="100" required />
+        <label for="email">E-post</label>
+        <InputText id="email" type="email" @bind-Value="Input.Email" autocomplete="email" required />
+        <label for="password">Lösenord</label>
+        <InputText id="password" type="password" @bind-Value="Input.Password" autocomplete="new-password" aria-describedby="password-help" required />
+        <p id="password-help" class="field-help">Minst 10 tecken med stor och liten bokstav, siffra och specialtecken.</p>
+        <label for="confirm-password">Bekräfta lösenord</label>
+        <InputText id="confirm-password" type="password" @bind-Value="Input.ConfirmPassword" autocomplete="new-password" required />
+        <button type="submit">Skapa konto</button>
+    </EditForm>
+    <p><a href="/login">Har du redan ett konto? Logga in</a></p>
+</section>
+
+@code {
+    [SupplyParameterFromForm] private RegisterInput Input { get; set; } = default!;
+    private List<string> errors = [];
+
+    protected override void OnInitialized() => Input ??= new();
+
+    private async Task RegisterUser()
+    {
+        var nickname = Input.Nickname.Trim();
+        if (nickname.Length < 2)
+        {
+            errors = ["Nickname måste innehålla minst två tecken."];
+            return;
+        }
+        var postalCode = Input.PostalCode.Replace(" ", "");
+        var user = new ApplicationUser
+        {
+            UserName = nickname,
+            Email = Input.Email.Trim(),
+            FullName = Input.FullName.Trim(),
+            Address = Input.Address.Trim(),
+            PostalCode = postalCode.Insert(3, " "),
+            City = Input.City.Trim()
+        };
+        var result = await UserManager.CreateAsync(user, Input.Password);
+        if (!result.Succeeded)
+        {
+            errors = result.Errors.Select(error => error.Description).ToList();
+            return;
+        }
+        // Registration never assigns a privileged role.
+        await SignInManager.SignInAsync(user, isPersistent: false);
+        Navigation.NavigateTo("/", forceLoad: true);
+    }
+
+    private sealed class RegisterInput
+    {
+        [Required(ErrorMessage = "Ange nickname."), StringLength(32, MinimumLength = 2, ErrorMessage = "Nickname ska vara 2–32 tecken.")]
+        [RegularExpression(@"[\p{L}\p{N}_. -]+", ErrorMessage = "Använd bokstäver, siffror, mellanslag, punkt, bindestreck eller understreck.")]
+        public string Nickname { get; set; } = "";
+        [Required(ErrorMessage = "Ange namn."), StringLength(100, ErrorMessage = "Namn får vara högst 100 tecken.")]
+        public string FullName { get; set; } = "";
+        [Required(ErrorMessage = "Ange adress."), StringLength(200, ErrorMessage = "Adress får vara högst 200 tecken.")]
+        public string Address { get; set; } = "";
+        [Required(ErrorMessage = "Ange postnummer.")]
+        [RegularExpression(@"[0-9]{3} ?[0-9]{2}", ErrorMessage = "Ange postnummer med fem siffror, till exempel 123 45.")]
+        public string PostalCode { get; set; } = "";
+        [Required(ErrorMessage = "Ange postort."), StringLength(100, ErrorMessage = "Postort får vara högst 100 tecken.")]
+        public string City { get; set; } = "";
+        [Required(ErrorMessage = "Ange e-post."), EmailAddress(ErrorMessage = "Ange en giltig e-postadress.")]
+        public string Email { get; set; } = "";
+        [Required(ErrorMessage = "Ange lösenord."), StringLength(128, MinimumLength = 10, ErrorMessage = "Lösenordet ska vara 10–128 tecken.")]
+        public string Password { get; set; } = "";
+        [Required(ErrorMessage = "Bekräfta lösenordet."), Compare(nameof(Password), ErrorMessage = "Lösenorden stämmer inte överens.")]
+        public string ConfirmPassword { get; set; } = "";
+    }
+}

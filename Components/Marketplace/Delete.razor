@@ -1,0 +1,44 @@
+@page "/marknad/{Id:int}/radera"
+@attribute [Authorize]
+@inject ApplicationDbContext Database
+@inject AdvertisementService Advertisements
+@inject NavigationManager Navigation
+
+<PageTitle>Ta bort annons</PageTitle>
+<section class="account-panel"><h1>Ta bort annons</h1>
+    @if (!allowed) { <p>Annonsen saknas eller du saknar behörighet.</p> }
+    else
+    {
+        <p>Annonsen ”@title” och alla tillhörande bilder tas bort permanent.</p>
+        @if (error is not null) { <p role="alert">@error</p> }
+        <EditForm Model="Input" method="post" FormName="advertisement-delete" OnValidSubmit="Remove">
+            <input type="hidden" name="Input.Version" value="@Input.Version" />
+            <label class="checkbox-label"><InputCheckbox @bind-Value="Input.Confirmed" /> Jag vill ta bort annonsen</label>
+            <button type="submit">Ta bort annons</button><a href="/marknad/mina">Avbryt</a>
+        </EditForm>
+    }
+</section>
+@code {
+    [Parameter] public int Id { get; set; }
+    [CascadingParameter] private HttpContext HttpContext { get; set; } = default!;
+    [SupplyParameterFromForm] private DeleteInput Input { get; set; } = default!;
+    public sealed class DeleteInput { public bool Confirmed { get; set; } public string Version { get; set; } = ""; }
+    private bool allowed;
+    private string? title, error;
+    protected override async Task OnInitializedAsync()
+    {
+        HttpContext.Response.Headers.CacheControl = "no-store";
+        var ad = await Database.Advertisements.AsNoTracking().SingleOrDefaultAsync(a => a.Id == Id);
+        allowed = ad is not null && await Advertisements.CanEditAsync(HttpContext.User, ad);
+        if (!allowed) { HttpContext.Response.StatusCode = ad is null ? 404 : 403; return; }
+        title = ad!.Title;
+        Input ??= new() { Version = ad.Version };
+    }
+    private async Task Remove()
+    {
+        if (!allowed) return;
+        var result = await Advertisements.DeleteAsync(HttpContext.User, Id, Input.Version, Input.Confirmed);
+        if (result.Succeeded) Navigation.NavigateTo("/marknad/mina", forceLoad: true);
+        else error = result.Message;
+    }
+}

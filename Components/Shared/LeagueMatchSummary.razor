@@ -1,0 +1,24 @@
+@using WDWAPP.Data
+@using WDWAPP.Services
+<div class="league-table league-match-table" tabindex="0" role="region" aria-label="Matchresultat">
+    <table>
+        <thead><tr><th scope="col">Player</th><th scope="col">Faction</th><th scope="col" title="Points for">PTSF</th><th scope="col" title="Points against">PTSA</th><th scope="col">W/L/D</th>@if (ShowRatingChanges) { <th scope="col">ELO</th> }</tr></thead>
+        <tbody>
+            <tr><th scope="row" style="text-align: left;">@One</th><td style="text-align: left;">@(Match.PlayerOneFaction ?? "–")</td><td>@(Match.PlayerOnePoints?.ToString() ?? "–")</td><td>@(Match.PlayerTwoPoints?.ToString() ?? "–")</td><td>@Result(true)</td>@if (ShowRatingChanges) { <td title="@RatingTitle(OneRatingChange)">@RatingChange(OneRatingChange)</td> }</tr>
+            <tr><th scope="row" style="text-align: left;">@Two</th><td style="text-align: left;">@(Match.PlayerTwoFaction ?? "–")</td><td>@(Match.PlayerTwoPoints?.ToString() ?? "–")</td><td>@(Match.PlayerOnePoints?.ToString() ?? "–")</td><td>@Result(false)</td>@if (ShowRatingChanges) { <td title="@RatingTitle(TwoRatingChange)">@RatingChange(TwoRatingChange)</td> }</tr>
+        </tbody>
+    </table>
+</div>
+@if (Match.Status == LeagueMatchStatus.Disputed) { <p>Bestridd – räknas inte i tabellen</p> }
+@code {
+    [Parameter, EditorRequired] public LeagueMatch Match { get; set; } = default!;
+    [Parameter, EditorRequired] public string One { get; set; } = "";
+    [Parameter, EditorRequired] public string Two { get; set; } = "";
+    [Parameter] public bool ShowRatingChanges { get; set; }
+    [Parameter] public int? OneRatingChange { get; set; }
+    [Parameter] public int? TwoRatingChange { get; set; }
+    private static string RatingChange(int? change) => change?.ToString("+0;-0;0") ?? "–";
+    private static string RatingTitle(int? change) => change.HasValue ? "ELO-förändring för matchen" : "ELO är inte fastställd för matchen ännu";
+    private string Result(bool one) => Match.Outcome == LeagueOutcome.Draw ? "D"
+        : (Match.Outcome == LeagueOutcome.PlayerOneWin) == one ? "W" : "L";
+}

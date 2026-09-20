@@ -1,0 +1,81 @@
+@page "/sok-match/{Id:int}"
+@inject MatchRequestService Requests
+@inject NavigationManager Navigation
+
+<PageTitle>@(item?.DisplayTitle ?? "Matchförfrågan saknas")</PageTitle>
+<section class="news-section">
+    <p><a href="/kalender">Till kalendern</a></p>
+    @if (item is null) { <h1>Matchförfrågan finns inte längre.</h1> }
+    else
+    {
+        <article class="news-card red-border news-content event-match">
+            <h1>@item.DisplayTitle</h1>
+            <EventDate Item="item.CalendarEvent" />
+            <p>Spel: <strong>@item.Game</strong></p>
+            <p>Spelare: <strong>@item.OwnerUser.UserName</strong></p>
+            @if (item.AcceptedByUserId != null)
+            {
+                <p>Matchen är bokad med <strong>@item.AcceptedByUser?.UserName</strong>.</p>
+            }
+            else if (!Requests.IsFuture(item.CalendarEvent)) { <p>Starttiden har passerat. Förfrågan kan inte längre accepteras.</p> }
+            else
+            {
+                <p>Ledig – väntar på motspelare.</p>
+                @if (access.CanPlay && access.UserId != item.OwnerUserId)
+                {
+                    <EditForm Model="AcceptInput" method="post" FormName="match-accept" OnValidSubmit="Accept">
+                        <input type="hidden" name="AcceptInput.Version" value="@AcceptInput.Version" />
+                        <button type="submit">Acceptera match</button>
+                    </EditForm>
+                }
+                else if (!access.Eligible) { <p>Logga in med terminspass eller nyckelmedlemskap för att acceptera matchen. <a href="/login">Logga in</a></p> }
+            }
+            @if (message is not null) { <p role="status">@message</p> }
+            @if (access.Eligible && (access.Admin || access.UserId == item.OwnerUserId && item.AcceptedByUserId == null))
+            {
+                @if (access.UserId == item.OwnerUserId && item.AcceptedByUserId == null)
+                { <p><a href="/sok-match/@Id/redigera">Ändra datum, tid eller spel</a></p> }
+                <EditForm Model="DeleteInput" method="post" FormName="match-delete" OnValidSubmit="Delete">
+                    <input type="hidden" name="DeleteInput.Version" value="@DeleteInput.Version" />
+                    <label class="checkbox-label"><InputCheckbox @bind-Value="DeleteInput.Confirmed" /> Ta bort matchförfrågan och kalenderposten</label>
+                    <button type="submit">Ta bort</button>
+                </EditForm>
+            }
+        </article>
+    }
+</section>
+@code {
+    [Parameter] public int Id { get; set; }
+    [CascadingParameter] private HttpContext HttpContext { get; set; } = default!;
+    [SupplyParameterFromForm(FormName = "match-accept")] private ActionInput AcceptInput { get; set; } = default!;
+    [SupplyParameterFromForm(FormName = "match-delete")] private ActionInput DeleteInput { get; set; } = default!;
+    private MatchRequest? item;
+    private MatchRequestAccess access = new(false, false, null, null);
+    private string? message;
+    protected override async Task OnInitializedAsync()
+    {
+        HttpContext.Response.Headers.CacheControl = "no-store";
+        await Load();
+        AcceptInput ??= new() { Version = item?.Version ?? "" };
+        DeleteInput ??= new() { Version = item?.Version ?? "" };
+    }
+    private async Task Load()
+    {
+        access = await Requests.AccessAsync(HttpContext.User);
+        item = await Requests.VisibleRequests(access).SingleOrDefaultAsync(r => r.Id == Id);
+        if (item is null) HttpContext.Response.StatusCode = 404;
+    }
+    private async Task Accept()
+    {
+        var result = await Requests.AcceptAsync(HttpContext.User, Id, AcceptInput.Version);
+        message = result.Message;
+        await Load();
+    }
+    private async Task Delete()
+    {
+        var result = await Requests.DeleteAsync(HttpContext.User, Id, DeleteInput.Version, DeleteInput.Confirmed);
+        if (result.Succeeded) Navigation.NavigateTo("/sok-match", forceLoad: true);
+        else { message = result.Message; await Load(); }
+    }
+    private sealed class ActionInput { public string Version { get; set; } = ""; public bool Confirmed { get; set; } }
+}

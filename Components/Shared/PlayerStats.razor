@@ -1,0 +1,15 @@
+@using WDWAPP.Services
+<section class="player-statistics">
+    <h3>Matchstatistik:</h3>
+    <dl class="player-stats">
+        <div><dt><abbr tabindex="0" title="Spelade, bekräftade matcher i 40K-ligan, alla terminer. Inställda omgångar räknas inte.">M</abbr></dt><dd>@Stats.Played</dd></div>
+        <div><dt><abbr tabindex="0" title="Vunna matcher">W</abbr></dt><dd>@Stats.Won</dd></div>
+        <div><dt><abbr tabindex="0" title="Vinster delat med förluster. Oavgjorda räknas inte. ∞ betyder vinster utan förluster; – betyder inga vinster eller förluster.">W/L</abbr></dt><dd>@Stats.WinLossRatio</dd></div>
+        <div><dt><abbr tabindex="0" title="Genomsnittliga poäng gjorda, endast matcher med registrerade poäng">PF</abbr></dt><dd>@(Stats.PointsFor?.ToString("0.0") ?? "–")</dd></div>
+        <div><dt><abbr tabindex="0" title="Genomsnittliga poäng emot, endast matcher med registrerade poäng">PA</abbr></dt><dd>@(Stats.PointsAgainst?.ToString("0.0") ?? "–")</dd></div>
+        <div class="player-faction"><dt><abbr tabindex="0" title="Mest spelade faction. Vid delad förstaplats visas alla.">Mest Spelade:</abbr></dt><dd>@Stats.MostPlayedFaction</dd></div>
+    </dl>
+</section>
+@code {
+    [Parameter, EditorRequired] public PlayerStatistics Stats { get; set; } = default!;
+}

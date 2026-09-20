@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="WDWAPP.csproj" />
+  <Project Path="tests/WDWAPP.Tests/WDWAPP.Tests.csproj" />
+</Solution>

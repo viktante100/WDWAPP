@@ -1,0 +1,57 @@
+@page "/spelare"
+@inject ApplicationDbContext Database
+
+<PageTitle>Spelare · Wermland Dice Warriors</PageTitle>
+<section class="player-section">
+    <header class="player-heading">
+        <h1>Ligaspelare</h1>
+        @if (mine.HasValue) { <a class="market-button" href="/spelare/@mine/redigera">Redigera profil</a> }
+        else
+        {
+            <AuthorizeView Policy="@AccessLevels.Member"><Authorized><a href="/spelare/ny">Skapa spelarprofil</a></Authorized>
+               </AuthorizeView>
+        }
+    </header>
+    @if (players.Count == 0) { <p>Inga spelarprofiler ännu.</p> }
+    <div class="player-roster">
+        @foreach (var player in players)
+        {
+            <article class="player-card red-border" id="spelare-@player.Id">
+                <div class="player-images"><PlayerPortrait Source="@player.ImageUrl" Zoom="player.ImageZoom" X="player.ImageX" Y="player.ImageY" />
+                    <img class="player-club-logo" src="/Images/wdw-logo.svg" alt="Wermland Dice Warriors" width="120" height="144" /></div>
+                <div class="player-card-body"><div class="player-identity"><div><h2>@player.DisplayName</h2>
+                      <PlayerTitles Titles="player.SelfReportedTitles" />
+                    </div></div>
+                  
+                    <PlayerStats Stats="@statistics.GetValueOrDefault(player.UserId, new PlayerStatistics(0, 0, 0, null, null, "–"))" />
+                    @if (HttpContext.User.IsInRole(AccessLevels.Admin)) { <a href="/spelare/@player.Id/redigera">Redigera profil</a> }
+                </div>
+            </article>
+        }
+    </div>
+</section>
+@code {
+    [CascadingParameter] private HttpContext HttpContext { get; set; } = default!;
+    private List<PlayerProfile> players = [];
+    private int? mine;
+    private Dictionary<string, PlayerStatistics> statistics = [];
+    protected override async Task OnInitializedAsync()
+    {
+        // Fetch image presence only; image bytes are served separately and lazy-loaded by the browser.
+        var rows = await Database.PlayerProfiles.AsNoTracking().Join(Database.Users,
+            p => p.UserId, u => u.Id, (p, u) => new { p.Id, p.UserId, u.FullName, u.UserName,
+                p.FirstNameOnly, p.ImageZoom, p.ImageX, p.ImageY, p.Nickname, p.Avatar, p.Version,
+                HasImage = p.ImageData != null, p.SelfReportedTitles }).ToListAsync();
+        players = rows.Select(p => new PlayerProfile { Id = p.Id, UserId = p.UserId, DisplayName = PlayerProfile.PublicName(p.FullName, p.UserName, p.FirstNameOnly),
+            ImageZoom = p.ImageZoom, ImageX = p.ImageX, ImageY = p.ImageY,
+            Nickname = p.Nickname, Avatar = p.Avatar, Version = p.Version,
+            ImageData = p.HasImage ? [] : null, SelfReportedTitles = p.SelfReportedTitles }).OrderBy(p => p.DisplayName).ToList();
+        var leaguePlayers = await Database.LeaguePlayers.AsNoTracking().ToListAsync();
+        var results = await Database.LeagueMatches.AsNoTracking().Include(m => m.Session)
+            .Where(m => m.Status == LeagueMatchStatus.Confirmed && m.Session.Status != LeagueSessionStatus.Cancelled).ToListAsync();
+        var byPlayer = results.SelectMany(m => new[] { (Id: m.PlayerOneId, Match: m), (Id: m.PlayerTwoId, Match: m) }).ToLookup(m => m.Id, m => m.Match);
+        statistics = leaguePlayers.ToDictionary(p => p.UserId, p => PlayerStatistics.Calculate(p.Id, byPlayer[p.Id]));
+        var userId = HttpContext.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        mine = players.SingleOrDefault(p => p.UserId == userId)?.Id;
+    }
+}

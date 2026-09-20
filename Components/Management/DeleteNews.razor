@@ -1,0 +1,48 @@
+@page "/hantera/nyheter/{Id:int}/ta-bort"
+@inject ApplicationDbContext Database
+@inject NewsService News
+@inject NavigationManager Navigation
+
+<PageTitle>Ta bort nyhet</PageTitle>
+<section class="account-panel">
+    <h1>Ta bort nyhet</h1>
+    @if (article is null) { <p>Nyheten finns inte längre.</p> }
+    else
+    {
+        <h2>@article.Title</h2>
+        <p>Nyheten tas bort från arkivet och startsidan. Detta går inte att ångra.</p>
+        @if (error is not null) { <p role="alert" class="validation-message">@error</p> }
+        <EditForm Model="Input" method="post" FormName="news-delete" OnValidSubmit="Delete">
+            <input type="hidden" name="Input.Version" value="@Input.Version" />
+            <label class="checkbox-label"><InputCheckbox @bind-Value="Input.Confirmed" /> Jag bekräftar att nyheten ska tas bort.</label>
+            <button type="submit">Ta bort nyhet</button>
+            <a href="/nyheter">Avbryt</a>
+        </EditForm>
+    }
+</section>
+
+@code {
+    [Parameter] public int Id { get; set; }
+    [CascadingParameter] private HttpContext HttpContext { get; set; } = default!;
+    [SupplyParameterFromForm] private DeleteInput Input { get; set; } = default!;
+    private NewsArticle? article;
+    private string? error;
+    protected override async Task OnInitializedAsync()
+    {
+        article = await Database.NewsArticles.AsNoTracking().SingleOrDefaultAsync(article => article.Id == Id);
+        if (article is null) HttpContext.Response.StatusCode = 404;
+        if (article?.EventId is int eventId) { Input ??= new(); Navigation.NavigateTo($"/hantera/evenemang/{eventId}", forceLoad: true); return; }
+        Input ??= new() { Version = article?.Version ?? "" };
+    }
+    private async Task Delete()
+    {
+        var result = await News.DeleteAsync(HttpContext.User, Id, Input.Version, Input.Confirmed);
+        if (result.Succeeded) Navigation.NavigateTo("/nyheter", forceLoad: true);
+        else error = result.Message;
+    }
+    private sealed class DeleteInput
+    {
+        public string Version { get; set; } = "";
+        public bool Confirmed { get; set; }
+    }
+}

@@ -1,0 +1,41 @@
+@page "/marknad/mina"
+@attribute [Authorize]
+@inject ApplicationDbContext Database
+@inject TimeProvider Clock
+
+<PageTitle>Mina annonser</PageTitle>
+<section class="market-section"><a href="/marknad">Till Marknad</a><h1>@(admin ? "Hantera annonser" : "Mina annonser")</h1><a class="market-button" href="/marknad/ny">Ny annons</a>
+    @if (items.Count == 0) { <p>Inga annonser på den här sidan.</p> }
+    @foreach (var item in items)
+    {
+        <article class="news-card red-border news-content"><span class="market-type">@AdvertisementLabels.Type(item.Type)</span><h2>@item.Title</h2>
+            @if (item.ExpiresAt <= now) { <p>Utgången. Väntar på automatisk borttagning.</p> }
+            else { <p>Visas till @item.ExpiresAt.ToString("yyyy-MM-dd")</p><div class="news-actions"><a href="/marknad/@item.Id">Visa</a><a href="/marknad/@item.Id/redigera">Redigera</a></div> }
+            <p><a href="/marknad/@item.Id/radera">Ta bort</a></p>
+        </article>
+    }
+    <nav class="news-actions" aria-label="Mina annonssidor">
+        @if (CurrentPage > 1) { <a href="/marknad/mina?Page=@(CurrentPage - 1)">Föregående</a> }
+        @if (hasMore) { <a href="/marknad/mina?Page=@(CurrentPage + 1)">Nästa</a> }
+    </nav>
+</section>
+@code {
+    [CascadingParameter] private HttpContext HttpContext { get; set; } = default!;
+    [SupplyParameterFromQuery] public int Page { get; set; } = 1;
+    private int CurrentPage => Math.Clamp(Page, 1, 100000);
+    private List<Advertisement> items = [];
+    private bool admin, hasMore;
+    private DateTime now;
+    protected override async Task OnInitializedAsync()
+    {
+        HttpContext.Response.Headers.CacheControl = "no-store";
+        now = Clock.GetUtcNow().UtcDateTime;
+        var userId = HttpContext.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        admin = HttpContext.User.IsInRole(AccessLevels.Admin);
+        items = await Database.Advertisements.AsNoTracking().Where(a => admin || a.OwnerUserId == userId)
+            .OrderByDescending(a => a.CreatedAt).ThenByDescending(a => a.Id).Skip((CurrentPage - 1) * AdvertisementService.PageSize)
+            .Take(AdvertisementService.PageSize + 1).ToListAsync();
+        hasMore = items.Count > AdvertisementService.PageSize;
+        if (hasMore) items.RemoveAt(items.Count - 1);
+    }
+}

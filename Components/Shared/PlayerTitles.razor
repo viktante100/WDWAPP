@@ -1,0 +1,20 @@
+@using WDWAPP.Data
+@if (Titles.LeagueWins > 0 || Titles.RttWins > 0 || Titles.ChampionshipWins > 0)
+{
+    <h3>Titlar</h3>
+    <div class="player-titles" aria-label="Titlar">
+        @for (var i = 0; i < Titles.LeagueWins; i++)
+        {
+            <img src="/Images/Badges/leaguetitle.svg" alt="40K-ligatitel" title="40K-ligatitel" width="48" height="48" loading="lazy" />
+        }
+        @for (var i = 0; i < Titles.RttWins; i++)
+        {
+            <img src="/Images/Badges/RTTas.svg" alt="WDW RTT-titel" title="WDW RTT-titel" width="48" height="48" loading="lazy" />
+        }
+        @for (var i = 0; i < Titles.ChampionshipWins; i++)
+        {
+            <img src="/Images/Badges/clubchampionship.svg" alt="Ligamästerskapstitel" title="Ligamästerskapstitel" width="48" height="48" loading="lazy" />
+        }
+    </div>
+}
+@code { [Parameter, EditorRequired] public SelfReportedTitles Titles { get; set; } = default!; }

@@ -1,0 +1,71 @@
+@inject ApplicationDbContext Database
+<h2>Mina matcher</h2>
+@if (Season is not null)
+{
+    @if (!Season.IsClosed && registration is null)
+    { <p><a href="/ligan/atgard?action=enroll&season=@Season.Id">Anmäl mig till @Season.Title</a></p> }
+    @foreach (var match in matches)
+    {
+        <article class="news-content red-border league-match-card">
+            <h3>@match.Session.Date.ToString("yyyy-MM-dd") · Omgång @match.SessionId</h3>
+            <LeagueMatchSummary Match="match" One="@Name(match.PlayerOneId)" Two="@Name(match.PlayerTwoId)"
+                ShowRatingChanges="true" OneRatingChange="@RatingChange(match.Id, match.PlayerOneId)" TwoRatingChange="@RatingChange(match.Id, match.PlayerTwoId)" />
+            @if (!Season.IsClosed && match.Session.Status == LeagueSessionStatus.Open)
+            {
+                <div class="news-actions">
+                    @if (match.Status == LeagueMatchStatus.Pending && match.ReporterId != registration?.PlayerId)
+                    { <MatchDecision Match="match" /> }
+                    @if (match.Status != LeagueMatchStatus.Confirmed)
+                    { <a href="@ActionLink("edit", match)">Ändra rapporterat resultat</a> }
+                </div>
+            }
+        </article>
+    }
+    @if (matches.Count == 0) { <p>Du har inga rapporterade matcher i den här ligan.</p> }
+    @foreach (var bye in entries.Where(p => p.IsBye))
+    { <p>@bye.Session.Date.ToString("yyyy-MM-dd"): WO · 3 ligapoäng</p> }
+    @if (!Season.IsClosed && registration is not null)
+    {
+        @foreach (var round in rounds.Where(s => s.Status == LeagueSessionStatus.Open && s.Date >= LeagueService.RegistrationDate(registration)))
+        {
+            var entry = entries.SingleOrDefault(p => p.SessionId == round.Id);
+            @if (entry is null)
+            { <p>@round.Date.ToString("yyyy-MM-dd") · <a href="/ligan/atgard?action=join&session=@round.Id">Anmäl mig till omgången</a></p> }
+            else if (entry.MatchId is null && !entry.IsBye)
+            { <p>@round.Date.ToString("yyyy-MM-dd") · <a href="/ligan/atgard?action=report&session=@round.Id">Rapportera match</a></p> }
+        }
+    }
+}
+@code {
+    [Parameter] public LeagueSeason? Season { get; set; }
+    [CascadingParameter] private HttpContext HttpContext { get; set; } = default!;
+    private LeagueRegistration? registration;
+    private List<LeagueMatch> matches = [];
+    private List<LeagueSession> rounds = [];
+    private List<LeagueParticipation> entries = [];
+    private List<LeagueRating> ratings = [];
+    private int? RatingChange(int matchId, int playerId) => ratings.FirstOrDefault(r => r.MatchId == matchId && r.PlayerId == playerId)?.Change;
+    private Dictionary<int, string> names = [];
+    private string Name(int id) => names.GetValueOrDefault(id, "Spelare");
+    private string ActionLink(string action, LeagueMatch match) => $"/ligan/atgard?action={action}&session={match.SessionId}&match={match.Id}";
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Season is null) return;
+        var uid = HttpContext.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        registration = await Database.LeagueRegistrations.AsNoTracking().SingleOrDefaultAsync(r => r.SeasonId == Season.Id && r.Player.UserId == uid);
+        if (registration is null) return;
+        var id = registration.PlayerId;
+        matches = await Database.LeagueMatches.AsNoTracking().Include(m => m.Session)
+            .Where(m => m.Session.SeasonId == Season.Id && (m.PlayerOneId == id || m.PlayerTwoId == id))
+            .OrderByDescending(m => m.Session.Date).ThenByDescending(m => m.Id).ToListAsync();
+        var playerIds = matches.SelectMany(m => new[] { m.PlayerOneId, m.PlayerTwoId }).Distinct().ToArray();
+        var matchIds = matches.Select(m => m.Id).ToArray();
+        ratings = await Database.LeagueRatings.AsNoTracking().Where(r => matchIds.Contains(r.MatchId)).ToListAsync();
+        names = await Database.LeaguePlayers.AsNoTracking()
+    .Include(p => p.User)  
+    .Where(p => playerIds.Contains(p.Id))
+    .ToDictionaryAsync(p => p.Id, p => p.User.UserName!);
+        rounds = await Database.LeagueSessions.AsNoTracking().Where(s => s.SeasonId == Season.Id).OrderBy(s => s.Date).ToListAsync();
+        entries = await Database.LeagueParticipations.AsNoTracking().Include(p => p.Session).Where(p => p.Session.SeasonId == Season.Id && p.PlayerId == id).ToListAsync();
+    }
+}

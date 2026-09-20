@@ -1,0 +1,12 @@
+@using WDWAPP.Data
+<p class="event-date">
+    <time datetime="@Item.Date.ToString("yyyy-MM-dd")">@Item.Date.ToString("d MMMM yyyy", Swedish)</time>
+    @if (Item.Time.HasValue)
+    {
+        <span> kl. <time datetime="@Item.Time.Value.ToString("HH:mm")">@Item.Time.Value.ToString("HH:mm")</time></span>
+    }
+</p>
+@code {
+    [Parameter, EditorRequired] public CalendarEvent Item { get; set; } = default!;
+    private static readonly System.Globalization.CultureInfo Swedish = System.Globalization.CultureInfo.GetCultureInfo("sv-SE");
+}

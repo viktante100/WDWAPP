@@ -1,0 +1,76 @@
+@page "/sok-match"
+@page "/bokning"
+@page "/sok-match/{Id:int}/redigera"
+@attribute [Authorize(Policy = AccessLevels.Member)]
+@inject MatchRequestService Requests
+@inject NavigationManager Navigation
+
+<PageTitle>Sök match · Wermland Dice Warriors</PageTitle>
+<section class="account-panel news-editor">
+    <h1>@(Id.HasValue ? "Ändra matchförfrågan" : "Sök match")</h1>
+    <p><a href="/kalender">Visa kalendern</a></p>
+    @if (error is not null) { <p role="alert" class="validation-message">@error</p> }
+    @if (!access.CanPlay)
+    { <p>Terminspass eller högre behörighet krävs för att söka match.</p> }
+    else if (editable)
+    {
+        <p>Du söker match som <strong>@access.Nickname</strong>. Lediga förfrågningar visas offentligt. När matchen bokas visas den bara för deltagarna, och admin kan hantera den.</p>
+        <EditForm Model="Input" method="post" FormName="match-request" OnValidSubmit="Save">
+            <DataAnnotationsValidator /><ValidationSummary role="alert" />
+            <input type="hidden" name="Input.Version" value="@Input.Version" />
+            <label for="match-date">Datum</label><InputDate id="match-date" @bind-Value="Input.Date" required />
+            <label for="match-time">Starttid (svensk tid)</label><InputText id="match-time" type="time" @bind-Value="Input.Time" required />
+            <label for="match-game">Spel</label><InputSelect id="match-game" @bind-Value="Input.Game" required>
+                <option value="">Välj spel</option>
+                @foreach (var game in MatchGames.All) { <option value="@game">@game</option> }
+            </InputSelect>
+            <button type="submit">@(Id.HasValue ? "Spara ändringar" : "Sök match")</button>
+        </EditForm>
+    }
+</section>
+<section class="news-section">
+    <h2>@(access.Admin ? "Aktiva matchförfrågningar" : "Mina matcher och förfrågningar")</h2>
+    @if (items.Count == 0) { <p>Inga kommande matcher eller förfrågningar.</p> }
+    @foreach (var item in items)
+    {
+        <article class="news-card red-border news-content event-match">
+            <h3><a href="/sok-match/@item.Id">@item.DisplayTitle</a></h3>
+            <EventDate Item="item.CalendarEvent" />
+            @if (item.AcceptedByUserId != null) { <p>Matchen är bokad.</p> }
+            else { <p>Väntar på motspelare.</p> }
+            <a href="/sok-match/@item.Id">Visa matchförfrågan</a>
+        </article>
+    }
+</section>
+@code {
+    [Parameter] public int? Id { get; set; }
+    [CascadingParameter] private HttpContext HttpContext { get; set; } = default!;
+    [SupplyParameterFromForm] private MatchRequestInput Input { get; set; } = default!;
+    private MatchRequestAccess access = new(false, false, null, null);
+    private List<MatchRequest> items = [];
+    private bool editable = true;
+    private string? error;
+    protected override async Task OnInitializedAsync()
+    {
+        HttpContext.Response.Headers.CacheControl = "no-store";
+        access = await Requests.AccessAsync(HttpContext.User);
+        MatchRequest? item = null;
+        if (Id.HasValue)
+        {
+            item = await Requests.VisibleRequests(access).SingleOrDefaultAsync(r => r.Id == Id);
+            editable = item is not null && item.OwnerUserId == access.UserId && item.AcceptedByUserId == null;
+            if (!editable) { HttpContext.Response.StatusCode = item is null ? 404 : 403; error = "Förfrågan saknas eller kan inte ändras av dig."; }
+        }
+        Input ??= item is null ? new() : new() { Date = item.CalendarEvent.Date, Time = item.CalendarEvent.Time?.ToString("HH:mm") ?? "", Game = item.Game, Version = item.Version };
+        var today = DateOnly.FromDateTime(Requests.LocalNow);
+        items = (await Requests.VisibleRequests(access).Where(r => r.CalendarEvent.Date >= today &&
+            (access.Admin || r.OwnerUserId == access.UserId || r.AcceptedByUserId == access.UserId && access.UserId != null))
+            .OrderBy(r => r.CalendarEvent.Date).ThenBy(r => r.CalendarEvent.Time).ToListAsync()).Where(r => Requests.IsFuture(r.CalendarEvent)).ToList();
+    }
+    private async Task Save()
+    {
+        var result = await Requests.SaveAsync(HttpContext.User, Id, Input);
+        if (result.Succeeded) Navigation.NavigateTo($"/sok-match/{result.Id}", forceLoad: true);
+        else error = result.Message;
+    }
+}

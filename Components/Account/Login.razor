@@ -1,0 +1,54 @@
+@page "/login"
+@inject UserManager<ApplicationUser> UserManager
+@inject SignInManager<ApplicationUser> SignInManager
+@inject NavigationManager Navigation
+
+<PageTitle>Logga in</PageTitle>
+<section class="account-panel">
+    <h1>Logga in</h1>
+    @if (error is not null)
+    {
+        <p class="validation-message" role="alert">@error</p>
+    }
+    <EditForm Model="Input" method="post" FormName="login" OnValidSubmit="LogIn">
+        <DataAnnotationsValidator />
+        <ValidationSummary role="alert" />
+        <label for="email">E-post</label>
+        <InputText id="email" type="email" @bind-Value="Input.Email" autocomplete="username" required />
+        <label for="password">Lösenord</label>
+        <InputText id="password" type="password" @bind-Value="Input.Password" autocomplete="current-password" required />
+        <label class="checkbox-label"><InputCheckbox @bind-Value="Input.RememberMe" /> Kom ihåg mig</label>
+        <button type="submit">Logga in</button>
+    </EditForm>
+    <p><a href="/register">Skapa konto</a></p>
+</section>
+
+@code {
+    [SupplyParameterFromForm] private LoginInput Input { get; set; } = default!;
+    [SupplyParameterFromQuery] private string? ReturnUrl { get; set; }
+    private string? error;
+
+    protected override void OnInitialized() => Input ??= new();
+
+    private async Task LogIn()
+    {
+        var user = await UserManager.FindByEmailAsync(Input.Email.Trim());
+        var result = user is null ? SignInResult.Failed : await SignInManager.PasswordSignInAsync(
+            user, Input.Password, Input.RememberMe, lockoutOnFailure: true);
+        if (result.Succeeded)
+        {
+            Navigation.NavigateTo(LocalReturnUrl.Get(ReturnUrl), forceLoad: true);
+            return;
+        }
+        error = "Inloggningen misslyckades. Kontrollera e-post och lösenord eller försök igen senare.";
+    }
+
+    private sealed class LoginInput
+    {
+        [Required(ErrorMessage = "Ange e-post."), EmailAddress(ErrorMessage = "Ange en giltig e-postadress.")]
+        public string Email { get; set; } = "";
+        [Required(ErrorMessage = "Ange lösenord.")]
+        public string Password { get; set; } = "";
+        public bool RememberMe { get; set; }
+    }
+}

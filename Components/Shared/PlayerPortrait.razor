@@ -1,0 +1,13 @@
+@using System.Globalization
+<div class="player-portrait-frame" style="@Style" data-player-portrait>
+    <img class="player-portrait" src="@Source" alt="@Alt" width="120" height="144" draggable="false" />
+</div>
+@code {
+    [Parameter] public string Source { get; set; } = "";
+    [Parameter] public string Alt { get; set; } = "";
+    [Parameter] public double Zoom { get; set; } = 1;
+    [Parameter] public double X { get; set; } = 50;
+    [Parameter] public double Y { get; set; } = 25;
+    private string Style => string.Create(CultureInfo.InvariantCulture,
+        $"--portrait-zoom:{Zoom};--portrait-x:{X}%;--portrait-y:{Y}%;--portrait-tx:{(50-X)*(Zoom-1)}%;--portrait-ty:{(50-Y)*(Zoom-1)}%");
+}

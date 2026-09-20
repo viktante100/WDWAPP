@@ -1,0 +1,24 @@
+@page "/account"
+@attribute [Authorize]
+@inject SignInManager<ApplicationUser> SignInManager
+@inject NavigationManager Navigation
+
+<PageTitle>Mitt konto</PageTitle>
+<section class="account-panel">
+    <h1>Mitt konto</h1>
+    <p>Inloggad som <strong>@HttpContext.User.Identity?.Name</strong>.</p>
+    <form method="post" @onsubmit="LogOut" @formname="logout">
+        <AntiforgeryToken />
+        <button type="submit">Logga ut</button>
+    </form>
+</section>
+
+@code {
+    [CascadingParameter] private HttpContext HttpContext { get; set; } = default!;
+
+    private async Task LogOut()
+    {
+        await SignInManager.SignOutAsync();
+        Navigation.NavigateTo("/", forceLoad: true);
+    }
+}

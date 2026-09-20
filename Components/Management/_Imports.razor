@@ -1,0 +1,6 @@
+@using System.ComponentModel.DataAnnotations
+@using Microsoft.EntityFrameworkCore
+@using WDWAPP.Data
+@using WDWAPP.Services
+@attribute [ExcludeFromInteractiveRouting]
+@attribute [Authorize(Policy = AccessLevels.KeyMember)]

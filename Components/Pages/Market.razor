@@ -1,0 +1,81 @@
+@page "/marknad"
+@attribute [ExcludeFromInteractiveRouting]
+@using WDWAPP.Services
+@using WDWAPP.Data
+@using System.Security.Claims
+@inject AdvertisementService Advertisements
+
+<PageTitle>Marknad · Wermland Dice Warriors</PageTitle>
+<section class="market-section">
+    <header class="market-heading"><h1>Marknad</h1>
+    </header>
+    <AuthorizeView Policy="@AccessLevels.Member"><NotAuthorized>
+        @if (context.User.Identity?.IsAuthenticated == true) { <p>Medlemskap krävs för att sätta in en annons.</p> }
+        else { <p>Logga in som medlem för att sätta in en annons.</p> }
+    </NotAuthorized></AuthorizeView>
+    <AuthorizeView><p><a href="/marknad/mina">Mina annonser</a></p></AuthorizeView>
+    @if (items.Count == 0) { <p>Inga aktuella annonser på den här sidan.</p> }
+    <div class="market-grid">
+        @foreach (var item in items)
+        {
+            <article class="market-card red-border" id="annons-@item.Id" aria-labelledby="rubrik-@item.Id">
+                <div class="market-card-scroll" tabindex="0" role="region" aria-label="@($"Annons: {item.Title}")">
+                    @if (item.ImageIds.Count > 0)
+                    {
+                        <div class="market-thumbnails">
+                            @foreach (var imageId in item.ImageIds)
+                            {
+                                <button type="button" class="market-image-button" data-market-image="/marknad/bilder/@imageId" data-image-title="@item.Title" aria-label="@($"Förstora bild {item.ImageIds.IndexOf(imageId) + 1}: {item.Title}")">
+                                    <img class="news-image market-thumbnail" src="/marknad/bilder/@imageId" alt="" loading="lazy" />
+                                </button>
+                            }
+                        </div>
+                    }
+                    <div class="market-card-content"><span class="market-type">@AdvertisementLabels.Type(item.Type)</span><h2 id="rubrik-@item.Id">@item.Title</h2>
+                        <p class="news-body">@item.Description</p>
+                        @if (CanEdit(item)) { <div class="news-actions"><a href="/marknad/@item.Id/redigera">Redigera</a><a href="/marknad/@item.Id/radera">Ta bort</a></div> }
+                    </div>
+                </div>
+                <footer class="market-card-footer"><time datetime="@item.CreatedAt.ToString("O")">@item.CreatedAt.ToString("yyyy-MM-dd")</time>
+                    <button type="button" class="market-contact-button" data-market-dialog="kontakt-@item.Id">Kontakta annonsören</button>
+                </footer>
+                <dialog id="kontakt-@item.Id" class="market-dialog" aria-labelledby="kontakt-rubrik-@item.Id">
+                    <div class="market-dialog-heading"><h2 id="kontakt-rubrik-@item.Id">Kontakta annonsören</h2><button type="button" data-market-close autofocus>Stäng</button></div>
+                    @if (HttpContext.User.Identity?.IsAuthenticated == true)
+                    {
+                    <p>@item.Title</p><dl class="market-contact-list">
+                        @foreach (var contact in item.Contacts)
+                        { <div><dt>@AdvertisementLabels.Contact(contact.Type)</dt><dd>@(contact.Type == AdvertisementContactType.AtVenue ? "Träffas i lokalen." : contact.Value)</dd></div> }
+                    </dl>
+                    }
+                    else { <p><a href="/login">Logga in</a> för att se kontaktuppgifterna.</p> }
+                </dialog>
+            </article>
+        }
+    </div>
+    <dialog id="market-image-popup" class="market-dialog market-image-dialog" aria-labelledby="market-image-title">
+        <div class="market-dialog-heading"><h2 id="market-image-title">Annonsbild</h2><button type="button" data-market-close autofocus>Stäng</button></div>
+        <img alt="" />
+    </dialog>
+    <nav class="news-actions" aria-label="Annonssidor">
+        @if (CurrentPage > 1) { <a href="/marknad?Page=@(CurrentPage - 1)">Föregående</a> }
+        @if (hasMore) { <a href="/marknad?Page=@(CurrentPage + 1)">Nästa</a> }
+    </nav>
+</section>
+
+@code {
+    [CascadingParameter] private HttpContext HttpContext { get; set; } = default!;
+    [SupplyParameterFromQuery] public int Page { get; set; } = 1;
+    private int CurrentPage => Math.Clamp(Page, 1, 100000);
+    private List<AdvertisementPreview> items = [];
+    private bool hasMore;
+    private bool CanEdit(AdvertisementPreview item) => HttpContext.User.Identity?.IsAuthenticated == true
+        && (HttpContext.User.FindFirstValue(ClaimTypes.NameIdentifier) == item.OwnerUserId || HttpContext.User.IsInRole(AccessLevels.Admin));
+    protected override async Task OnInitializedAsync()
+    {
+        HttpContext.Response.Headers.CacheControl = "no-store";
+        items = await Advertisements.ListAsync(CurrentPage);
+        hasMore = items.Count > AdvertisementService.PageSize;
+        if (hasMore) items.RemoveAt(items.Count - 1);
+    }
+}

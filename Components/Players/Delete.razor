@@ -1,0 +1,42 @@
+@page "/spelare/{Id:int}/radera"
+@attribute [Authorize]
+@inject ApplicationDbContext Database
+@inject PlayerProfileService Profiles
+@inject NavigationManager Navigation
+
+<PageTitle>Radera profil</PageTitle>
+<section class="account-panel"><h1>Radera profil</h1>
+    @if (!allowed) { <p>Profilen saknas eller du saknar behörighet.</p> }
+    else
+    {
+        <p>Spelarprofilen och profilbilden tas bort. Ditt medlemskonto och dina ligaresultat finns kvar.</p>
+        @if (error is not null) { <p role="alert">@error</p> }
+        <EditForm Model="Input" method="post" FormName="player-delete" OnValidSubmit="Remove">
+            <input type="hidden" name="Input.Version" value="@Input.Version" />
+            <label class="checkbox-label"><InputCheckbox @bind-Value="Input.Confirmed" /> Jag vill radera profilen</label>
+            <button type="submit">Radera profil</button><a href="/spelare/@Id/redigera">Avbryt</a>
+        </EditForm>
+    }
+</section>
+@code {
+    [Parameter] public int Id { get; set; }
+    [CascadingParameter] private HttpContext HttpContext { get; set; } = default!;
+    [SupplyParameterFromForm] private DeleteInput Input { get; set; } = default!;
+    public sealed class DeleteInput { public bool Confirmed { get; set; } public string Version { get; set; } = ""; }
+    private bool allowed;
+    private string? error;
+    protected override async Task OnInitializedAsync()
+    {
+        var profile = await Database.PlayerProfiles.AsNoTracking().SingleOrDefaultAsync(p => p.Id == Id);
+        allowed = profile is not null && await Profiles.CanEditAsync(HttpContext.User, profile);
+        if (!allowed) HttpContext.Response.StatusCode = profile is null ? 404 : 403;
+        Input ??= new() { Version = profile?.Version ?? "" };
+    }
+    private async Task Remove()
+    {
+        if (!allowed) return;
+        var result = await Profiles.DeleteAsync(HttpContext.User, Id, Input.Version, Input.Confirmed);
+        if (result.Succeeded) Navigation.NavigateTo("/spelare", forceLoad: true);
+        else error = result.Message;
+    }
+}

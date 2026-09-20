@@ -1,0 +1,119 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000" role="img" aria-labelledby="title desc">
+<title id="title">Wermland Dice Warriors</title>
+<desc id="desc">Rounded silver badge with a red die, W.D.W banner, Wermland Dice Warriors and Est. 2015.</desc>
+<defs>
+  <linearGradient id="silver" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#f4f4f4"/>
+    <stop offset=".28" stop-color="#9a9a9a"/>
+    <stop offset=".55" stop-color="#eeeeee"/>
+    <stop offset=".78" stop-color="#777"/>
+    <stop offset="1" stop-color="#d8d8d8"/>
+  </linearGradient>
+  <linearGradient id="ribbon" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#fff"/>
+    <stop offset=".55" stop-color="#d8d8d8"/>
+    <stop offset="1" stop-color="#aaa"/>
+  </linearGradient>
+  <linearGradient id="redTop" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#ff2525"/>
+    <stop offset=".5" stop-color="#e00000"/>
+    <stop offset="1" stop-color="#ff2020"/>
+  </linearGradient>
+  <linearGradient id="redLeft" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#f31919"/>
+    <stop offset="1" stop-color="#9e0000"/>
+  </linearGradient>
+  <linearGradient id="redRight" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#d50000"/>
+    <stop offset="1" stop-color="#7d0000"/>
+  </linearGradient>
+</defs>
+
+<!-- Transparent outside the emblem -->
+<path d="M500 38
+ C535 38 566 51 595 68
+ L842 211
+ C875 230 895 264 895 302
+ L895 698
+ C895 736 875 770 842 789
+ L595 932
+ C566 949 535 962 500 962
+ C465 962 434 949 405 932
+ L158 789
+ C125 770 105 736 105 698
+ L105 302
+ C105 264 125 230 158 211
+ L405 68
+ C434 51 465 38 500 38 Z"
+ fill="url(#silver)" stroke="#111" stroke-width="14" stroke-linejoin="round"/>
+
+<path d="M500 60
+ C530 60 555 70 580 85
+ L825 226
+ C852 242 869 270 869 302
+ L869 698
+ C869 730 852 758 825 774
+ L580 915
+ C555 930 530 940 500 940
+ C470 940 445 930 420 915
+ L175 774
+ C148 758 131 730 131 698
+ L131 302
+ C131 270 148 242 175 226
+ L420 85
+ C445 70 470 60 500 60 Z"
+ fill="none" stroke="#fff" stroke-width="8" opacity=".9"/>
+
+<!-- Die -->
+<polygon points="500,155 765,305 500,455 235,305"
+ fill="url(#redTop)" stroke="#111" stroke-width="12" stroke-linejoin="round"/>
+<polygon points="235,305 500,455 500,695 235,545"
+ fill="url(#redLeft)" stroke="#111" stroke-width="12" stroke-linejoin="round"/>
+<polygon points="500,455 765,305 765,545 500,695"
+ fill="url(#redRight)" stroke="#111" stroke-width="12" stroke-linejoin="round"/>
+
+<!-- White die bevels -->
+<polyline points="238,304 500,452 762,304" fill="none" stroke="#f7f7f7" stroke-width="18" stroke-linejoin="round"/>
+<line x1="500" y1="455" x2="500" y2="693" stroke="#f7f7f7" stroke-width="16"/>
+
+<!-- Pips -->
+<g fill="#090909" stroke="#eee" stroke-width="4">
+  <ellipse cx="400" cy="265" rx="35" ry="27"/>
+  <ellipse cx="500" cy="215" rx="35" ry="27"/>
+  <ellipse cx="600" cy="265" rx="35" ry="27"/>
+  <ellipse cx="450" cy="340" rx="35" ry="27"/>
+  <ellipse cx="550" cy="340" rx="35" ry="27"/>
+  <ellipse cx="500" cy="390" rx="35" ry="27"/>
+  <ellipse cx="305" cy="410" rx="28" ry="42" transform="rotate(-18 305 410)"/>
+  <ellipse cx="390" cy="560" rx="28" ry="42" transform="rotate(-18 390 560)"/>
+  <ellipse cx="695" cy="410" rx="28" ry="42" transform="rotate(18 695 410)"/>
+  <ellipse cx="610" cy="560" rx="28" ry="42" transform="rotate(18 610 560)"/>
+</g>
+
+<!-- Ribbon tails -->
+<path d="M105 438 L225 392 L260 478 L145 530 L162 462 Z"
+ fill="url(#ribbon)" stroke="#111" stroke-width="11" stroke-linejoin="round"/>
+<path d="M895 438 L775 392 L740 478 L855 530 L838 462 Z"
+ fill="url(#ribbon)" stroke="#111" stroke-width="11" stroke-linejoin="round"/>
+
+<!-- Main ribbon -->
+<path d="M160 430
+ Q500 345 840 430
+ L810 615
+ Q500 540 190 615 Z"
+ fill="url(#ribbon)" stroke="#111" stroke-width="13" stroke-linejoin="round"/>
+
+<text x="500" y="500" text-anchor="middle"
+ font-family="Arial Black, Arial, sans-serif" font-size="104" font-weight="900"
+ fill="#e00000" stroke="#111" stroke-width="8" paint-order="stroke">W.D.W</text>
+
+<text x="500" y="558" text-anchor="middle"
+ font-family="Arial Black, Arial, sans-serif" font-size="36" font-weight="900"
+ letter-spacing="1" fill="#fff" stroke="#111" stroke-width="8" paint-order="stroke">
+ WERMLAND DICE WARRIORS
+</text>
+
+<text x="500" y="845" text-anchor="middle"
+ font-family="Arial Black, Arial, sans-serif" font-size="42" font-weight="900"
+ fill="#111">EST. 2015</text>
+</svg>

@@ -1,0 +1,36 @@
+@page "/hantera/ligan"
+@attribute [Authorize(Policy = AccessLevels.Admin)]
+@inject ApplicationDbContext Database
+<PageTitle>Hantera 40K-ligan</PageTitle>
+<section class="news-section">
+    <a href="/hantera">Admin / Keymember</a><h1>Hantera 40K-ligan</h1>
+    @if (seasons.All(s => s.IsClosed)) { <p><a href="/ligan/atgard?action=create-season">Skapa liga</a></p> }
+    <p>Skapa datum manuellt. Spelarna anmäler sig själva. Öppna en omgång för matcher, WO, datumändring och slutförande.</p>
+    @foreach (var season in seasons)
+    {
+        <article class="news-content red-border">
+            <h2>@season.Title</h2><p>@(season.IsClosed ? "Avslutad" : "Pågående")</p>
+            <div class="news-actions">
+            <a href="/ligan/atgard?action=delete-season&season=@season.Id">Radera liga</a>
+            @if (!season.IsClosed)
+            { <a href="/ligan/atgard?action=create&season=@season.Id">Skapa omgång</a><a href="/ligan/atgard?action=close-season&season=@season.Id">Avsluta liga</a> }
+            </div>
+            @foreach (var session in sessions.Where(s => s.SeasonId == season.Id))
+            { <p><a href="/ligan/omgang/@session.Id">@session.Date.ToString("yyyy-MM-dd") · Omgång @session.Id</a> · @LeagueLabels.Session(session.Status)</p> }
+        </article>
+    }
+    <details><summary>Ändringslogg (senaste 100)</summary>
+    @foreach (var audit in audits) { <p><time>@audit.Utc.ToString("u")</time> · @audit.ActorId <code>@audit.Description</code></p> }
+    </details>
+</section>
+@code {
+    private List<LeagueSession> sessions = [];
+    private List<LeagueSeason> seasons = [];
+    private List<LeagueAudit> audits = [];
+    protected override async Task OnInitializedAsync()
+    {
+        seasons = await Database.LeagueSeasons.AsNoTracking().OrderByDescending(s => s.Year).ThenByDescending(s => s.Term).ToListAsync();
+        sessions = await Database.LeagueSessions.AsNoTracking().OrderByDescending(s => s.Date).ThenByDescending(s => s.Id).ToListAsync();
+        audits = await Database.LeagueAudits.AsNoTracking().OrderByDescending(a => a.Id).Take(100).ToListAsync();
+    }
+}

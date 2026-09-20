@@ -1,0 +1,32 @@
+@page "/hantera/evenemang"
+@inject ApplicationDbContext Database
+@inject MatchRequestService Requests
+<PageTitle>Hantera evenemang</PageTitle>
+<section class="news-section">
+    <a href="/hantera">Till Admin / Keymember</a>
+    <h1>Hantera evenemang</h1>
+    <p><a href="/hantera/evenemang/ny">Skapa evenemang</a></p>
+    @if (items.Count == 0) { <p>Inga evenemang ännu.</p> }
+    @foreach (var item in items)
+    {
+        <article class="news-card red-border news-content">
+            <h2><a href="@($"/evenemang/{item.Id}")">@item.DisplayTitle</a></h2>
+            <EventDate Item="item" />
+            @if (item.LeagueSessionId.HasValue) { <p><a href="/ligan/omgang/@item.LeagueSessionId">Hantera ligaomgång</a></p> }
+            else if (item.MatchRequestId.HasValue) { <p><a href="/sok-match/@item.MatchRequestId">Visa matchförfrågan</a></p> }
+            else { <div class="news-actions"><a href="@($"/hantera/evenemang/{item.Id}")">Redigera</a><a href="@($"/hantera/evenemang/{item.Id}/ta-bort")">Ta bort</a></div> }
+        </article>
+    }
+</section>
+@code {
+    [CascadingParameter] private HttpContext HttpContext { get; set; } = default!;
+    private List<CalendarEvent> items = [];
+    protected override async Task OnInitializedAsync()
+    {
+        HttpContext.Response.Headers.CacheControl = "no-store";
+        var access = await Requests.AccessAsync(HttpContext.User);
+        items = await Database.Events.AsNoTracking().VisibleTo(access.UserId, access.Admin)
+        .OrderByDescending(item => item.Date).ThenBy(item => item.Time).ThenBy(item => item.Id)
+        .Summaries().ToListAsync();
+    }
+}

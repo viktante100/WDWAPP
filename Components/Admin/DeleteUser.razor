@@ -1,0 +1,63 @@
+@page "/admin/users/{Id}/delete"
+@inject UserManager<ApplicationUser> UserManager
+@inject AdminUserService Administration
+@inject NavigationManager Navigation
+
+<PageTitle>Ta bort användare</PageTitle>
+<section class="account-panel">
+    <h1>Ta bort användare</h1>
+    @if (user is null)
+    {
+        <p>Kontot finns inte längre.</p>
+        <a href="/admin">Till användarlistan</a>
+    }
+    else
+    {
+        <p>Du tar bort <strong>@user.UserName</strong> (<span class="user-email">@user.Email</span>) permanent. Det går inte att ångra.</p>
+        @if (UserManager.GetUserId(HttpContext.User) == Id)
+        {
+            <p>Du kan inte ta bort ditt eget konto.</p>
+        }
+        else
+        {
+            @if (error is not null) { <p class="validation-message" role="alert">@error</p> }
+            <EditForm Model="Input" method="post" FormName="delete-user" OnValidSubmit="Delete">
+                <DataAnnotationsValidator />
+                <ValidationSummary role="alert" />
+                <input type="hidden" name="Input.Version" value="@Input.Version" />
+                <label class="checkbox-label"><InputCheckbox @bind-Value="Input.Confirmed" /> Jag vill ta bort det här kontot permanent.</label>
+                <button type="submit">Ta bort permanent</button>
+            </EditForm>
+        }
+        <p><a href="@($"/admin/users/{Id}")">Avbryt</a></p>
+    }
+</section>
+
+@code {
+    [Parameter] public string Id { get; set; } = "";
+    [CascadingParameter] private HttpContext HttpContext { get; set; } = default!;
+    [SupplyParameterFromForm] private DeleteInput Input { get; set; } = default!;
+    private ApplicationUser? user;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        user = await UserManager.FindByIdAsync(Id);
+        if (user is null) { HttpContext.Response.StatusCode = 404; return; }
+        Input ??= new() { Version = user.ConcurrencyStamp! };
+    }
+
+    private async Task Delete()
+    {
+        var result = await Administration.DeleteAsync(HttpContext.User, Id, Input.Version, Input.Confirmed);
+        if (result.Succeeded) Navigation.NavigateTo("/admin?Status=deleted", forceLoad: true);
+        else error = result.Message;
+    }
+
+    private sealed class DeleteInput
+    {
+        [Required] public string Version { get; set; } = "";
+        [Range(typeof(bool), "true", "true", ErrorMessage = "Bekräfta att kontot ska tas bort.")]
+        public bool Confirmed { get; set; }
+    }
+}

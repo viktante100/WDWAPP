@@ -1,0 +1,25 @@
+@inject LeagueService League
+@inject NavigationManager Navigation
+@if (error is not null) { <p class="validation-message" role="alert">@error</p> }
+<EditForm Model="Input" FormName="@($"league-decision-{Match.Id}")" method="post" OnSubmit="Save">
+    <input type="hidden" name="Input.MatchId" value="@Match.Id" />
+    <input type="hidden" name="Input.SessionId" value="@Match.SessionId" />
+    <input type="hidden" name="Input.Version" value="@Match.Version" />
+    <button type="submit" name="Input.Action" value="confirm">Bekräfta</button>
+    <button type="submit" name="Input.Action" value="dispute">Bestrid</button>
+</EditForm>
+@code {
+    [Parameter, EditorRequired] public LeagueMatch Match { get; set; } = default!;
+    [SupplyParameterFromForm] private LeagueCommand Input { get; set; } = default!;
+    [CascadingParameter] private HttpContext HttpContext { get; set; } = default!;
+    private string? error;
+    protected override void OnParametersSet() => Input ??= new();
+    private async Task Save()
+    {
+        if (Input.MatchId != Match.Id || Input.SessionId != Match.SessionId || Input.Action is not ("confirm" or "dispute"))
+        { error = "Ogiltig matchåtgärd. Ladda om sidan."; return; }
+        var result = await League.ExecuteAsync(HttpContext.User, Input);
+        if (result.Succeeded) Navigation.NavigateTo("/ligan", forceLoad: true);
+        else error = result.Message;
+    }
+}

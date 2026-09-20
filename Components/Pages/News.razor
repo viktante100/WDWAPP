@@ -1,0 +1,65 @@
+@page "/nyheter"
+@attribute [ExcludeFromInteractiveRouting]
+@using Microsoft.EntityFrameworkCore
+@using WDWAPP.Data
+@using WDWAPP.Services
+@inject ApplicationDbContext Database
+
+<PageTitle>Nyheter – Wermland Dice Warriors</PageTitle>
+<section class="news-section">
+    <h1>Nyheter</h1>
+    <AuthorizeView Policy="@AccessLevels.KeyMember">
+        <p><a href="/hantera/nyheter/ny">Publicera en nyhet</a></p>
+    </AuthorizeView>
+    @if (articles.Count == 0)
+    {
+        <p>Inga nyheter ännu. Här kommer information om ligor, turneringar och livet i föreningen.</p>
+    }
+    @foreach (var article in articles)
+    {
+        <article class="news-card red-border" id="@($"nyhet-{article.Id}")">
+            @if (article.DisplayImageUrl is not null)
+            {
+                <div class="news-image-frame"><img class="news-image" src="@article.DisplayImageUrl" alt="@article.DisplayImageDescription" loading="lazy" referrerpolicy="no-referrer" /></div>
+            }
+            <div class="news-content">
+                <NewsDate Utc="article.PublishedUtc" />
+                @if (article.Event is not null)
+                {
+                    <EventDate Item="article.Event" />
+                    <p><a href="@($"/evenemang/{article.EventId}")">Visa evenemang i kalendern →</a></p>
+                }
+                <h2>@article.DisplayTitle</h2>
+                <p class="news-body">@article.DisplayBody</p>
+                @if (article.DisplayLinks.Length > 0)
+                {
+                    <ul class="news-links">
+                        @foreach (var link in NewsInput.LinkLines(article.DisplayLinks))
+                        {
+                            <li><a href="@link" rel="noopener noreferrer">@link</a></li>
+                        }
+                    </ul>
+                }
+                <AuthorizeView Policy="@AccessLevels.KeyMember">
+                    <div class="news-actions">
+                        @if (article.EventId.HasValue)
+                        {
+                            <a href="@($"/hantera/evenemang/{article.EventId}")">Redigera evenemang / avpublicera nyhet</a>
+                        }
+                        else
+                        {
+                        <a href="@($"/hantera/nyheter/{article.Id}")">Redigera</a>
+                        <a href="@($"/hantera/nyheter/{article.Id}/ta-bort")">Ta bort</a>
+                        }
+                    </div>
+                </AuthorizeView>
+            </div>
+        </article>
+    }
+</section>
+
+@code {
+    private List<NewsArticle> articles = [];
+    protected override async Task OnInitializedAsync() => articles = await Database.NewsArticles.AsNoTracking()
+        .OrderByDescending(article => article.PublishedUtc).ThenByDescending(article => article.Id).ToListAsync();
+}

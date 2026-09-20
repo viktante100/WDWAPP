@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 80">
+  <defs>
+    <linearGradient id="gold" x1="0" x2="1">
+      <stop offset="0" stop-color="#a86608"/>
+      <stop offset=".28" stop-color="#ffd86a"/>
+      <stop offset=".52" stop-color="#f4b928"/>
+      <stop offset=".78" stop-color="#fff0a0"/>
+      <stop offset="1" stop-color="#9b5b05"/>
+    </linearGradient>
+    <linearGradient id="darkGold" x1="0" x2="1">
+      <stop offset="0" stop-color="#744000"/>
+      <stop offset=".5" stop-color="#d98d08"/>
+      <stop offset="1" stop-color="#744000"/>
+    </linearGradient>
+  </defs>
+
+  <!-- handles -->
+  <path d="M15 20C5 19 4 29 7 36c2 5 7 8 12 10"
+        fill="none" stroke="url(#gold)" stroke-width="5" stroke-linecap="round"/>
+  <path d="M49 20c10-1 11 9 8 16-2 5-7 8-12 10"
+        fill="none" stroke="url(#gold)" stroke-width="5" stroke-linecap="round"/>
+
+  <!-- cup rim -->
+  <rect x="15" y="16" width="34" height="6" rx="2"
+        fill="url(#gold)" stroke="#704000" stroke-width="1"/>
+
+  <!-- cup -->
+  <path d="M17 21h30c-1 17-6 29-15 29S18 38 17 21z"
+        fill="url(#gold)" stroke="#704000" stroke-width="1.2"/>
+
+  <!-- simple league crown -->
+  <path d="M21 16l3-8 5 5 3-9 3 9 5-5 3 8z"
+        fill="url(#gold)" stroke="#704000" stroke-width="1.2" stroke-linejoin="round"/>
+  <circle cx="24" cy="8" r="1.6" fill="#ffe47b"/>
+  <circle cx="32" cy="4" r="1.8" fill="#ffe47b"/>
+  <circle cx="40" cy="8" r="1.6" fill="#ffe47b"/>
+
+  <!-- league emblem -->
+  <path d="M24 31c2 5 5 8 8 10M40 31c-2 5-5 8-8 10"
+        fill="none" stroke="#8d5405" stroke-width="1.8" stroke-linecap="round"/>
+  <path d="M25 33l-4-2 2 5M27 37l-4 0 3 4M39 33l4-2-2 5M37 37l4 0-3 4"
+        fill="#a96806"/>
+
+  <!-- stem -->
+  <rect x="29" y="49" width="6" height="4" rx="1" fill="url(#gold)"/>
+  <path d="M29 52h6c-2 4-2 8 2 11H27c4-3 4-7 2-11z"
+        fill="url(#gold)" stroke="#704000" stroke-width="1"/>
+
+  <!-- base -->
+  <path d="M24 62h16l4 5H20z" fill="url(#gold)" stroke="#704000" stroke-width="1"/>
+  <rect x="17" y="67" width="30" height="9" rx="2"
+        fill="#292929" stroke="#111" stroke-width="1"/>
+  <rect x="21" y="69" width="22" height="5" rx="1"
+        fill="url(#darkGold)" stroke="#e9b637" stroke-width=".8"/>
+  <rect x="14" y="75" width="36" height="4" rx="1.5"
+        fill="#1f1f1f" stroke="#111" stroke-width="1"/>
+</svg>

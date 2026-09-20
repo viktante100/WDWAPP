@@ -1,0 +1,87 @@
+@page "/kalender"
+@page "/evenemang"
+@attribute [ExcludeFromInteractiveRouting]
+@using System.Globalization
+@using Microsoft.EntityFrameworkCore
+@using WDWAPP.Data
+@using WDWAPP.Services
+@inject ApplicationDbContext Database
+@inject MatchRequestService Requests
+
+<PageTitle>Kalender – Wermland Dice Warriors</PageTitle>
+<section class="news-section">
+    <h1>Kalender</h1>
+    <AuthorizeView Policy="@AccessLevels.KeyMember"><p><a href="/hantera/evenemang">Hantera evenemang</a></p></AuthorizeView>
+    <nav class="calendar-navigation" aria-label="Välj månad">
+        @if (month > DateOnly.MinValue) { <a href="@MonthLink(month.AddMonths(-1))" aria-label="Föregående månad">←</a> }
+        <h2>@month.ToString("MMMM yyyy", Swedish)</h2>
+        @if (month.Year < 9999 || month.Month < 12) { <a href="@MonthLink(month.AddMonths(1))" aria-label="Nästa månad">→</a> }
+    </nav>
+    <div class="calendar-legend" aria-label="Evenemangstyper">
+        @foreach (var type in Enum.GetValues<CalendarEventType>())
+        { <span class="@CalendarPresentation.CssClass(type)"><span class="calendar-dot" aria-hidden="true"></span> @CalendarPresentation.Label(type)</span> }
+    </div>
+    <div class="calendar-month red-border">
+        <div class="calendar-grid">
+            @foreach (var dayName in new[] { "Mån", "Tis", "Ons", "Tor", "Fre", "Lör", "Sön" })
+            { <span class="calendar-weekday">@dayName</span> }
+            @for (var blank = 0; blank < ((int)month.DayOfWeek + 6) % 7; blank++) { <span aria-hidden="true"></span> }
+            @for (var day = 1; day <= DateTime.DaysInMonth(month.Year, month.Month); day++)
+            {
+                var date = new DateOnly(month.Year, month.Month, day);
+                var count = events.Count(item => item.Date == date);
+                <a class="calendar-day @(count > 0 ? "has-events" : "") @(date == today ? "today" : "") @(date == selected ? "selected" : "")" href="@DayLink(date)"
+                   aria-current="@(date == today ? "date" : null)"
+                   aria-label="@($"{date.ToString("d MMMM yyyy", Swedish)}, {count} evenemang")">
+                    <span>@day</span>
+                    <span class="calendar-dots" aria-hidden="true">
+                        @foreach (var type in events.Where(e => e.Date == date).Select(e => e.Type).Distinct())
+                        { <span class="calendar-dot @CalendarPresentation.CssClass(type)"></span> }
+                    </span>
+                </a>
+            }
+        </div>
+    </div>
+    <div id="dagens-evenemang">
+        @if (events.Any(item => item.Date == selected))
+        {
+        <section aria-labelledby="selected-day">
+        <h2 id="selected-day">@selected.ToString("d MMMM yyyy", Swedish)</h2>
+        @foreach (var item in events.Where(item => item.Date == selected))
+        {
+            <article class="news-card red-border news-content @CalendarPresentation.CssClass(item.Type)">
+                <span class="event-type">@CalendarPresentation.Label(item.Type)</span>
+                <h3><a href="@($"/evenemang/{item.Id}")">@item.DisplayTitle</a></h3>
+                <EventDate Item="item" />
+                <a href="@($"/evenemang/{item.Id}")">Visa evenemang →</a>
+            </article>
+        }
+        </section>
+        }
+    </div>
+</section>
+
+@code {
+    [CascadingParameter] private HttpContext HttpContext { get; set; } = default!;
+    [SupplyParameterFromQuery] public string? Month { get; set; }
+    [SupplyParameterFromQuery] public string? Day { get; set; }
+    private DateOnly month, selected, today;
+    private List<CalendarEvent> events = [];
+    private static readonly CultureInfo Swedish = CultureInfo.GetCultureInfo("sv-SE");
+    protected override async Task OnInitializedAsync()
+    {
+        HttpContext.Response.Headers.CacheControl = "no-store";
+        var access = await Requests.AccessAsync(HttpContext.User);
+        today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, TimeZoneInfo.FindSystemTimeZoneById("Europe/Stockholm")));
+        month = DateOnly.TryParseExact(Month + "-01", "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed) ? parsed : new(today.Year, today.Month, 1);
+        selected = DateOnly.TryParseExact(Day, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var chosen)
+            && chosen.Year == month.Year && chosen.Month == month.Month ? chosen
+            : today.Year == month.Year && today.Month == month.Month ? today : month;
+        var last = new DateOnly(month.Year, month.Month, DateTime.DaysInMonth(month.Year, month.Month));
+        events = await Database.Events.AsNoTracking().VisibleTo(access.UserId).Where(item => item.Date >= month && item.Date <= last)
+            .OrderBy(item => item.Date).ThenBy(item => item.Time).ThenBy(item => item.Id)
+            .Summaries().ToListAsync();
+    }
+    private static string MonthLink(DateOnly date) => $"/kalender?Month={date:yyyy-MM}";
+    private static string DayLink(DateOnly date) => $"/kalender?Month={date:yyyy-MM}&Day={date:yyyy-MM-dd}#dagens-evenemang";
+}

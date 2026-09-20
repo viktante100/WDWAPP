@@ -1,0 +1,7 @@
+<time datetime="@Utc.ToString("yyyy-MM-ddTHH:mm:ssZ")">@TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(Utc, DateTimeKind.Utc), Stockholm).ToString("d MMMM yyyy", Swedish)</time>
+
+@code {
+    [Parameter] public DateTime Utc { get; set; }
+    private static readonly TimeZoneInfo Stockholm = TimeZoneInfo.FindSystemTimeZoneById("Europe/Stockholm");
+    private static readonly System.Globalization.CultureInfo Swedish = System.Globalization.CultureInfo.GetCultureInfo("sv-SE");
+}

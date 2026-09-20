@@ -1,0 +1,116 @@
+@page "/admin/users/{Id}"
+@inject UserManager<ApplicationUser> UserManager
+@inject AdminUserService Administration
+@inject NavigationManager Navigation
+@inject ApplicationDbContext Database
+
+<PageTitle>Hantera användare</PageTitle>
+<section class="account-panel">
+    <a href="/admin">Till användarlistan</a>
+    <h1>Hantera användare</h1>
+    @if (user is null)
+    {
+        <p>Kontot finns inte längre.</p>
+    }
+    else
+    {
+        <h2>@(string.IsNullOrWhiteSpace(user.FullName) ? "Namn saknas" : user.FullName)</h2>
+        <p class="user-email">@user.Email</p>
+        @if (detailsError is not null) { <p class="validation-message" role="alert">@detailsError</p> }
+        <EditForm Model="Details" method="post" FormName="edit-user-details" OnValidSubmit="SaveDetails">
+            <DataAnnotationsValidator />
+            <ValidationSummary role="alert" />
+            <input type="hidden" name="Details.Version" value="@Details.Version" />
+            <label for="nickname">Nickname</label>
+            <InputText id="nickname" @bind-Value="Details.Nickname" minlength="2" maxlength="32" required />
+            <label for="full-name">Namn</label>
+            <InputText id="full-name" @bind-Value="Details.FullName" maxlength="100" />
+            <label for="address">Adress</label>
+            <InputText id="address" @bind-Value="Details.Address" maxlength="200" />
+            <label for="postal-code">Postnummer</label>
+            <InputText id="postal-code" @bind-Value="Details.PostalCode" maxlength="6" placeholder="123 45" />
+            <label for="city">Postort</label>
+            <InputText id="city" @bind-Value="Details.City" maxlength="100" />
+            <label for="email">E-post</label>
+            <InputText id="email" type="email" @bind-Value="Details.Email" required />
+            <label for="phone">Telefonnummer</label>
+            <InputText id="phone" type="tel" @bind-Value="Details.PhoneNumber" maxlength="50" />
+            <p class="field-help">Användaren behöver logga in igen efter en ändring. Tomma kontaktfält kan kompletteras senare.</p>
+            <button type="submit">Spara användaruppgifter</button>
+        </EditForm>
+        @if (profileId.HasValue)
+        {
+            <p><a href="/spelare/@profileId">Visa spelarprofil</a> · <a href="/spelare/@profileId/redigera">Redigera spelarprofil</a></p>
+        }
+        @if (UserManager.GetUserId(HttpContext.User) == Id)
+        {
+            <p>Det här är ditt konto. En annan administratör måste hantera din behörighet eller ta bort kontot.</p>
+        }
+        else
+        {
+            @if (error is not null) { <p class="validation-message" role="alert">@error</p> }
+            <EditForm Model="Input" method="post" FormName="edit-user" OnValidSubmit="Save">
+                <DataAnnotationsValidator />
+                <ValidationSummary role="alert" />
+                <input type="hidden" name="Input.Version" value="@Input.Version" />
+                <label for="level">Behörighet</label>
+                <InputSelect id="level" @bind-Value="Input.Level">
+                    <option value="@AccessLevels.LoggedIn">Inloggad</option>
+                    <option value="@AccessLevels.Member">Member</option>
+                    <option value="@AccessLevels.KeyMember">Keymember</option>
+                    <option value="@AccessLevels.Admin">Admin</option>
+                </InputSelect>
+                <p class="field-help">Användaren behöver logga in igen efter en ändring.</p>
+                <button type="submit">Spara behörighet</button>
+            </EditForm>
+            <p><a href="@($"/admin/users/{Id}/delete")">Ta bort användare</a></p>
+        }
+    }
+</section>
+
+@code {
+    [Parameter] public string Id { get; set; } = "";
+    [CascadingParameter] private HttpContext HttpContext { get; set; } = default!;
+    [SupplyParameterFromForm] private EditInput Input { get; set; } = default!;
+    [SupplyParameterFromForm(FormName = "edit-user-details")] private AdminUserInput Details { get; set; } = default!;
+    private string? detailsError;
+    private int? profileId;
+    private ApplicationUser? user;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        user = await UserManager.FindByIdAsync(Id);
+        if (user is null) { HttpContext.Response.StatusCode = 404; return; }
+        profileId = await Database.PlayerProfiles.Where(p => p.UserId == Id).Select(p => (int?)p.Id).SingleOrDefaultAsync();
+        Details ??= new() { Version = user.ConcurrencyStamp!, Nickname = user.UserName ?? "", Email = user.Email ?? "",
+            FullName = user.FullName, Address = user.Address, PostalCode = user.PostalCode, City = user.City, PhoneNumber = user.PhoneNumber };
+        if (Input is null)
+        {
+            var roles = await UserManager.GetRolesAsync(user);
+            Input = new() { Version = user.ConcurrencyStamp!, Level = roles.Contains(AccessLevels.Admin) ? AccessLevels.Admin
+                : roles.Contains(AccessLevels.KeyMember) ? AccessLevels.KeyMember
+                : roles.Contains(AccessLevels.Member) ? AccessLevels.Member : AccessLevels.LoggedIn };
+        }
+    }
+
+    private async Task Save()
+    {
+        var result = await Administration.ChangeLevelAsync(HttpContext.User, Id, Input.Version, Input.Level);
+        if (result.Succeeded) Navigation.NavigateTo("/admin?Status=updated", forceLoad: true);
+        else error = result.Message;
+    }
+
+    private async Task SaveDetails()
+    {
+        var result = await Administration.UpdateDetailsAsync(HttpContext.User, Id, Details);
+        if (result.Succeeded) Navigation.NavigateTo("/admin?Status=details-updated", forceLoad: true);
+        else detailsError = result.Message;
+    }
+
+    private sealed class EditInput
+    {
+        [Required] public string Version { get; set; } = "";
+        [Required] public string Level { get; set; } = "";
+    }
+}

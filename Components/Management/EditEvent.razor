@@ -1,0 +1,83 @@
+@page "/hantera/evenemang/ny"
+@page "/hantera/evenemang/{Id:int}"
+@inject ApplicationDbContext Database
+@inject MatchRequestService Requests
+@inject EventService Events
+@inject NavigationManager Navigation
+
+<PageTitle>@(Id.HasValue ? "Redigera evenemang" : "Skapa evenemang")</PageTitle>
+<section class="account-panel news-editor">
+    <a href="/hantera/evenemang">Till evenemangen</a>
+    <h1>@(Id.HasValue ? "Redigera evenemang" : "Skapa evenemang")</h1>
+    @if (missing) { <p>Evenemanget finns inte längre.</p> }
+    else
+    {
+        @if (error is not null) { <p role="alert" class="validation-message">@error</p> }
+        <EditForm Model="Input" method="post" enctype="multipart/form-data" FormName="event-edit" OnValidSubmit="Save">
+            <DataAnnotationsValidator /><ValidationSummary role="alert" />
+            <input type="hidden" name="Input.Version" value="@Input.Version" />
+            <label for="event-type">Typ</label><InputSelect id="event-type" @bind-Value="Input.Type" required>
+                <option value="">Välj typ</option><option value="Tournament">Turnering</option><option value="GameDay">Speldag</option>
+            </InputSelect>
+            <label for="event-title">Rubrik</label>
+            <InputText id="event-title" @bind-Value="Input.Title" maxlength="160" />
+            <label for="event-description">Beskrivning</label>
+            <InputTextArea id="event-description" @bind-Value="Input.Description" rows="10" maxlength="20000" />
+            <label for="event-date">Datum</label>
+            <InputDate id="event-date" @bind-Value="Input.Date" onclick="this.showPicker?.()" />
+            <label for="event-time">Starttid (valfritt)</label>
+            <InputText id="event-time" type="time" @bind-Value="Input.Time" onclick="this.showPicker?.()" />
+            @if (currentImage is not null)
+            {
+                <img class="news-image" src="@currentImage" alt="Nuvarande evenemangsbild" />
+                <label class="checkbox-label"><InputCheckbox @bind-Value="Input.RemoveImage" /> Ta bort nuvarande bild</label>
+            }
+            <label for="event-image">Ladda upp bild (valfritt)</label>
+            <input id="selected-event-image" type="hidden" name="Input.SelectedImageName" value="@Input.SelectedImageName" />
+            <input id="event-image" name="eventImage" type="file" accept="image/jpeg,image/png,image/gif,image/webp" aria-describedby="event-image-help"
+                   onchange="document.getElementById('selected-event-image').value = this.files[0]?.name || '';" />
+            <p id="event-image-help" class="field-help">JPEG, PNG, GIF eller WebP, högst 5 MB. En ny bild ersätter den nuvarande.</p>
+            @if (!string.IsNullOrEmpty(Input.SelectedImageName))
+            { <p class="validation-message" role="alert">Välj bildfilen @Input.SelectedImageName igen innan du sparar. Webbläsaren tömmer filvalet när formuläret visas på nytt.</p> }
+            <label for="event-link">Extern länk (valfritt)</label>
+            <InputText id="event-link" type="url" @bind-Value="Input.ExternalLink" maxlength="2048" />
+            <label class="checkbox-label"><InputCheckbox @bind-Value="Input.PublishAsNews" /> Publicera som nyhet</label>
+            <p class="field-help">Nyheten visar alltid evenemangets aktuella innehåll. Avmarkera för att ta bort den från nyhetsarkivet och startsidan. Evenemanget finns kvar i kalendern.</p>
+            <button type="submit">@(Id.HasValue ? "Spara ändringar" : "Skapa evenemang")</button>
+            <a href="/hantera/evenemang">Avbryt</a>
+        </EditForm>
+    }
+</section>
+@code {
+    [Parameter] public int? Id { get; set; }
+    [CascadingParameter] private HttpContext HttpContext { get; set; } = default!;
+    [SupplyParameterFromForm] private EventInput Input { get; set; } = default!;
+    private bool missing;
+    private string? error, currentImage;
+    protected override async Task OnInitializedAsync()
+    {
+        HttpContext.Response.Headers.CacheControl = "no-store";
+        var access = await Requests.AccessAsync(HttpContext.User);
+        var item = Id.HasValue ? await Database.Events.AsNoTracking().VisibleTo(access.UserId, access.Admin).IgnoreAutoIncludes().Include(item => item.NewsArticle).SingleOrDefaultAsync(item => item.Id == Id) : null;
+        if (Id.HasValue && item is null) { missing = true; HttpContext.Response.StatusCode = 404; }
+        currentImage = item?.DisplayImageUrl;
+        Input ??= item is null ? new() : new EventInput
+        {
+            Type = item.Type, Title = item.Title, Description = item.Description, Date = item.Date, Time = item.Time?.ToString("HH:mm"),
+            ExternalLink = item.ExternalLink, PublishAsNews = item.NewsArticle is not null, Version = item.Version
+        };
+        if (HttpMethods.IsPost(HttpContext.Request.Method))
+        {
+            var form = await HttpContext.Request.ReadFormAsync();
+            var image = form.Files.GetFile("eventImage");
+            if (image is { Length: > 0 }) Input.SelectedImageName = System.IO.Path.GetFileName(image.FileName);
+        }
+    }
+    private async Task Save()
+    {
+        var form = await HttpContext.Request.ReadFormAsync();
+        var result = await Events.SaveAsync(HttpContext.User, Id, Input, form.Files.GetFile("eventImage"));
+        if (result.Succeeded) Navigation.NavigateTo($"/evenemang/{result.Id}", forceLoad: true);
+        else error = result.Message;
+    }
+}

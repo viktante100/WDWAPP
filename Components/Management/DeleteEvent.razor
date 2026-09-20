@@ -1,0 +1,48 @@
+@page "/hantera/evenemang/{Id:int}/ta-bort"
+@inject ApplicationDbContext Database
+@inject MatchRequestService Requests
+@inject EventService Events
+@inject NavigationManager Navigation
+<PageTitle>Ta bort evenemang</PageTitle>
+<section class="account-panel">
+    <h1>Ta bort evenemang</h1>
+    @if (item is null) { <p>Evenemanget finns inte längre.</p> }
+    else
+    {
+        <h2>@item.Title</h2>
+        <p>Evenemanget, bilden och eventuell kopplad nyhet tas bort. Detta går inte att ångra.</p>
+        @if (error is not null) { <p class="validation-message" role="alert">@error</p> }
+        <EditForm Model="Input" method="post" FormName="event-delete" OnValidSubmit="Delete">
+            <input type="hidden" name="Input.Version" value="@Input.Version" />
+            <label class="checkbox-label"><InputCheckbox @bind-Value="Input.Confirmed" /> Jag bekräftar att evenemanget ska tas bort.</label>
+            <button type="submit">Ta bort evenemang</button>
+            <a href="/hantera/evenemang">Avbryt</a>
+        </EditForm>
+    }
+</section>
+@code {
+    [Parameter] public int Id { get; set; }
+    [CascadingParameter] private HttpContext HttpContext { get; set; } = default!;
+    [SupplyParameterFromForm] private DeleteInput Input { get; set; } = default!;
+    private CalendarEvent? item;
+    private string? error;
+    protected override async Task OnInitializedAsync()
+    {
+        HttpContext.Response.Headers.CacheControl = "no-store";
+        var access = await Requests.AccessAsync(HttpContext.User);
+        item = await Database.Events.AsNoTracking().VisibleTo(access.UserId, access.Admin).SingleOrDefaultAsync(item => item.Id == Id);
+        if (item is null) HttpContext.Response.StatusCode = 404;
+        Input ??= new() { Version = item?.Version ?? "" };
+    }
+    private async Task Delete()
+    {
+        var result = await Events.DeleteAsync(HttpContext.User, Id, Input.Version, Input.Confirmed);
+        if (result.Succeeded) Navigation.NavigateTo("/hantera/evenemang", forceLoad: true);
+        else error = result.Message;
+    }
+    private sealed class DeleteInput
+    {
+        public string Version { get; set; } = "";
+        public bool Confirmed { get; set; }
+    }
+}

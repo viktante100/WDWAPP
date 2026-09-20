@@ -1,0 +1,79 @@
+@page "/admin/medlemmar"
+@inject ApplicationDbContext Database
+
+<PageTitle>Medlemslista</PageTitle>
+<h1>Medlemslista</h1>
+<p><a href="/hantera">Till hanterasidan</a> · <a href="/admin">Hantera användare</a></p>
+<form method="get" action="/admin/medlemmar" class="admin-search">
+    <label for="member-search">Sök namn eller e-post</label>
+    <input id="member-search" name="Search" value="@Search" type="search" maxlength="128" />
+    <input type="hidden" name="Filtered" value="true" />
+    <fieldset class="member-level-filter">
+        <legend>Visa medlemsnivåer</legend>
+        @foreach (var level in AllLevels)
+        {
+            <label><input type="checkbox" name="Levels" value="@level" checked="@SelectedLevels.Contains(level)" /> @LevelLabel(level)</label>
+        }
+    </fieldset>
+    <button type="submit">Visa urval</button>
+</form>
+<p>@members.Count användare@(string.IsNullOrWhiteSpace(Search) ? "" : " matchar sökningen").</p>
+@if (members.Count == 0)
+{
+    <p>Inga användare hittades.</p>
+}
+else
+{
+    <div class="member-table">
+        <table>
+            <caption>Användare med valda medlemsnivåer, sorterade efter namn</caption>
+            <thead><tr><th scope="col">Namn</th><th scope="col">E-post</th><th scope="col">Medlemsnivå</th><th scope="col">Åtgärd</th></tr></thead>
+            <tbody>
+                @foreach (var member in members)
+                {
+                    <tr>
+                        <th scope="row">@(string.IsNullOrWhiteSpace(member.Name) ? "Namn saknas" : member.Name)</th>
+                        <td>@member.Email</td><td>@LevelLabel(member.Level)</td>
+                        <td><a href="/admin/users/@member.Id">Hantera <span class="visually-hidden">@(member.Name ?? member.Email)</span></a></td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    [SupplyParameterFromQuery] public string? Search { get; set; }
+    [SupplyParameterFromQuery] public bool Filtered { get; set; }
+    [SupplyParameterFromQuery] public string[]? Levels { get; set; }
+    private static readonly string[] AllLevels = [AccessLevels.LoggedIn, AccessLevels.Member, AccessLevels.KeyMember, AccessLevels.Admin];
+    private IEnumerable<string> SelectedLevels => !Filtered && Levels is not { Length: > 0 }
+        ? AllLevels : Levels ?? Array.Empty<string>();
+    private List<MemberRow> members = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        var rows = await (from user in Database.Users.AsNoTracking()
+                          join membership in Database.UserRoles on user.Id equals membership.UserId into memberships
+                          from membership in memberships.DefaultIfEmpty()
+                          join role in Database.Roles on membership.RoleId equals role.Id into roles
+                          from role in roles.DefaultIfEmpty()
+                          select new MemberRow(user.Id, user.FullName, user.Email, role == null ? AccessLevels.LoggedIn : role.Name!)).ToListAsync();
+        var search = Search?.Trim();
+        members = rows.Where(member => SelectedLevels.Contains(member.Level))
+            .Where(member => string.IsNullOrEmpty(search)
+                || (member.Name?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false)
+                || (member.Email?.Contains(search, StringComparison.OrdinalIgnoreCase) ?? false))
+            .OrderBy(member => member.Name, StringComparer.Create(new System.Globalization.CultureInfo("sv-SE"), true))
+            .ThenBy(member => member.Id).ToList();
+    }
+
+    private sealed record MemberRow(string Id, string? Name, string? Email, string Level);
+    private static string LevelLabel(string level) => level switch
+    {
+        AccessLevels.Member => "Terminspassinnehavare",
+        AccessLevels.KeyMember => "Nyckelmedlem",
+        AccessLevels.Admin => "Administratör",
+        _ => "Registrerad"
+    };
+}

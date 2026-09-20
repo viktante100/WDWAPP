@@ -1,0 +1,56 @@
+@page "/ligan"
+@attribute [ExcludeFromInteractiveRouting]
+@using WDWAPP.Services
+@using WDWAPP.Data
+@using Microsoft.EntityFrameworkCore
+@inject LeagueService LeagueData
+@inject ApplicationDbContext Database
+<PageTitle>@(season?.Title ?? "40K-ligan")</PageTitle>
+<section class="news-section">
+    <div class="news-content red-border league-standings-card">
+    <div class="league-table league-standings-table" tabindex="0" role="region" aria-label="Ligatabell">
+        <table>
+            <caption><h1>@(season?.Title ?? "40K-ligan")</h1></caption>
+            <thead><tr>
+                @foreach (var column in columns)
+                {
+                    <th scope="col" aria-sort="@(SortColumn == column ? (IsAscending ? "ascending" : "descending") : "none")"><a href="@SortLink(column)" aria-label="@column" title="@column">@if (column is "Matches" or "Points") { <span class="league-wide-label">@column</span><span class="league-short-label" aria-hidden="true">@(column == "Matches" ? "M" : "Pts")</span> } else { @(column == "Position" ? "P" : column) }</a></th>
+                }
+            </tr></thead>
+            <tbody>
+                @foreach (var row in rows)
+                {
+                    <tr><td>@row.Position</td><th scope="row">@row.Player</th><td>@row.Matches</td><td>@row.W</td><td>@row.D</td><td>@row.L</td><td>@row.PPG.ToString("0.00")</td><td>@(row.PTSF?.ToString() ?? "–")</td><td>@(row.PTSA?.ToString() ?? "–")</td><td>@row.ELO</td><td>@row.Points</td></tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    </div>
+    @if (season is null) { <p>Ingen liga har skapats ännu.</p> }
+    else if (season.IsClosed) { <p>Den här ligan är avslutad.</p> }
+    else if (rows.Count == 0) { <p>Inga ligaspelare ännu.</p> }
+    <AuthorizeView Policy="@AccessLevels.Admin"><p><a href="/hantera/ligan">Hantera ligan</a></p></AuthorizeView>
+    <AuthorizeView Policy="@AccessLevels.Member">
+        <Authorized><WDWAPP.Components.League.MyMatches Season="season" /></Authorized>
+        <NotAuthorized>
+            @if (context.User.Identity?.IsAuthenticated == true)
+            { <p>Du saknar behörighet att delta eftersom det krävs ett terminspass eller nyckelmedlemskap.</p> }
+            else { <p><a href="/login">Logga in för att delta</a></p> }
+        </NotAuthorized>
+    </AuthorizeView>
+</section>
+@code {
+    [SupplyParameterFromQuery] public string? Sort { get; set; }
+    [SupplyParameterFromQuery] public bool? Ascending { get; set; }
+    private LeagueSeason? season;
+    private readonly string[] columns = ["Position", "Player", "Matches", "W", "D", "L", "PPG", "PTSF", "PTSA", "ELO", "Points"];
+    private string SortColumn => columns.Contains(Sort) ? Sort! : "Position";
+    private bool IsAscending => Ascending ?? (SortColumn is "Position" or "Player");
+    private List<LeagueStanding> rows = [];
+    protected override async Task OnParametersSetAsync()
+    {
+        season = await LeagueData.CurrentSeasonAsync();
+        rows = season is null ? [] : LeagueRanking.Sort(await LeagueData.StandingsAsync(season.Id), SortColumn, IsAscending);
+    }
+    private string SortLink(string column) => $"/ligan?Sort={column}&Ascending={(SortColumn == column ? !IsAscending : column is "Position" or "Player").ToString().ToLowerInvariant()}";
+}
