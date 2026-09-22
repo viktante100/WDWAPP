@@ -1,7 +1,8 @@
 @using WDWAPP.Services
 <section class="player-statistics">
-    <h3>Matchstatistik:</h3>
+    <h3>Statistik:</h3>
     <dl class="player-stats">
+        <div><dt><abbr tabindex="0" title="Aktuell ELO i 40K-ligan, alla terminer">ELO</abbr></dt><dd>@(Elo?.ToString() ?? "–")</dd></div>
         <div><dt><abbr tabindex="0" title="Spelade, bekräftade matcher i 40K-ligan, alla terminer. Inställda omgångar räknas inte.">M</abbr></dt><dd>@Stats.Played</dd></div>
         <div><dt><abbr tabindex="0" title="Vunna matcher">W</abbr></dt><dd>@Stats.Won</dd></div>
         <div><dt><abbr tabindex="0" title="Vinster delat med förluster. Oavgjorda räknas inte. ∞ betyder vinster utan förluster; – betyder inga vinster eller förluster.">W/L</abbr></dt><dd>@Stats.WinLossRatio</dd></div>
@@ -12,4 +13,5 @@
 </section>
 @code {
     [Parameter, EditorRequired] public PlayerStatistics Stats { get; set; } = default!;
+    [Parameter] public int? Elo { get; set; }
 }

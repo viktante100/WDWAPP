@@ -23,7 +23,7 @@
                       <PlayerTitles Titles="player.SelfReportedTitles" />
                     </div></div>
                   
-                    <PlayerStats Stats="@statistics.GetValueOrDefault(player.UserId, new PlayerStatistics(0, 0, 0, null, null, "–"))" />
+                    <PlayerStats Stats="@statistics.GetValueOrDefault(player.UserId, new PlayerStatistics(0, 0, 0, null, null, "–"))" Elo="@elo.GetValueOrDefault(player.UserId)" />
                     @if (HttpContext.User.IsInRole(AccessLevels.Admin)) { <a href="/spelare/@player.Id/redigera">Redigera profil</a> }
                 </div>
             </article>
@@ -35,6 +35,7 @@
     private List<PlayerProfile> players = [];
     private int? mine;
     private Dictionary<string, PlayerStatistics> statistics = [];
+    private Dictionary<string, int?> elo = [];
     protected override async Task OnInitializedAsync()
     {
         // Fetch image presence only; image bytes are served separately and lazy-loaded by the browser.
@@ -47,6 +48,10 @@
             Nickname = p.Nickname, Avatar = p.Avatar, Version = p.Version,
             ImageData = p.HasImage ? [] : null, SelfReportedTitles = p.SelfReportedTitles }).OrderBy(p => p.DisplayName).ToList();
         var leaguePlayers = await Database.LeaguePlayers.AsNoTracking().ToListAsync();
+        var ratingChanges = await Database.LeagueRatings.AsNoTracking()
+            .GroupBy(r => r.PlayerId).Select(g => new { PlayerId = g.Key, Change = g.Sum(r => r.Change) })
+            .ToDictionaryAsync(r => r.PlayerId, r => r.Change);
+        elo = leaguePlayers.ToDictionary(p => p.UserId, p => (int?)(500 + ratingChanges.GetValueOrDefault(p.Id)));
         var results = await Database.LeagueMatches.AsNoTracking().Include(m => m.Session)
             .Where(m => m.Status == LeagueMatchStatus.Confirmed && m.Session.Status != LeagueSessionStatus.Cancelled).ToListAsync();
         var byPlayer = results.SelectMany(m => new[] { (Id: m.PlayerOneId, Match: m), (Id: m.PlayerTwoId, Match: m) }).ToLookup(m => m.Id, m => m.Match);
