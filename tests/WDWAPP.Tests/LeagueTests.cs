@@ -279,7 +279,7 @@ public sealed class LeagueTests : IDisposable
         using var visitor = NewClient();
         Assert.Equal(HttpStatusCode.Redirect, (await visitor.GetAsync("/ligan/spela")).StatusCode);
         Assert.Contains("href=\"/ligan\"", await visitor.GetStringAsync("/"));
-        Assert.DoesNotContain("/hantera/ligan", await visitor.GetStringAsync("/ligan"));
+        Assert.DoesNotContain("/hantera/ligan", await visitor.GetStringAsync("/ligan?View=mine"));
         Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsync("/ligan/atgard?action=enroll", new FormUrlEncodedContent(new Dictionary<string,string> { ["_handler"] = "league-action", ["Input.Action"] = "enroll" }))).StatusCode);
         Assert.Equal(HttpStatusCode.Found, (await Post(adminClient, "/ligan/atgard?action=create", "league-action", new() { ["Input.Action"] = "create", ["Input.Date"] = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(1).ToString("yyyy-MM-dd") })).StatusCode);
         var round = (await Rows<LeagueSession>()).Single().Id;
@@ -293,7 +293,7 @@ public sealed class LeagueTests : IDisposable
         Assert.DoesNotContain("action=finalize", html);
         Assert.DoesNotContain("action=confirm", html);
         Assert.Contains("action=finalize", await adminClient.GetStringAsync($"/ligan/omgang/{round}"));
-        var publicTable = await visitor.GetStringAsync("/ligan");
+        var publicTable = await visitor.GetStringAsync("/ligan?View=mine");
         Assert.Contains("title=\"Position\">P</a>", publicTable);
         Assert.Equal(new[] { "1", "2", "3" }, Regex.Matches(publicTable, "<tr><td>([0-9]+)</td>").Select(m => m.Groups[1].Value));
         var reversedTable = await visitor.GetStringAsync("/ligan?Sort=Position&Ascending=false");
@@ -301,7 +301,7 @@ public sealed class LeagueTests : IDisposable
         if (Environment.GetEnvironmentVariable("WDW_VISUAL_OUTPUT") is { Length: > 0 } output)
         {
             Directory.CreateDirectory(output);
-            await File.WriteAllTextAsync(Path.Combine(output, "league.html"), await client.GetStringAsync("/ligan"));
+            await File.WriteAllTextAsync(Path.Combine(output, "league.html"), await client.GetStringAsync("/ligan?View=mine"));
             await File.WriteAllTextAsync(Path.Combine(output, "round.html"), html);
         }
     }
@@ -397,27 +397,27 @@ public sealed class LeagueTests : IDisposable
         using var opponent = await Login(b); using var reporter = await Login(a); using var other = await Login(outsider);
         var pending = (await Rows<LeagueMatch>()).Single(m => m.Id == firstMatch);
         var fields = new Dictionary<string, string> { ["Input.Action"] = "confirm", ["Input.MatchId"] = firstMatch.ToString(), ["Input.SessionId"] = first.ToString(), ["Input.Version"] = pending.Version };
-        var html = WebUtility.HtmlDecode(await opponent.GetStringAsync("/ligan"));
+        var html = WebUtility.HtmlDecode(await opponent.GetStringAsync("/ligan?View=mine"));
         Assert.Contains($"league-decision-{firstMatch}", html); Assert.Contains($"league-decision-{secondMatch}", html);
         Assert.DoesNotContain("Väntar på motståndaren", html);
         Assert.DoesNotContain("action=confirm", html);
         var noCsrf = new Dictionary<string, string>(fields) { ["_handler"] = $"league-decision-{firstMatch}" };
         Assert.Equal(HttpStatusCode.BadRequest, (await opponent.PostAsync("/ligan", new FormUrlEncodedContent(noCsrf))).StatusCode);
-        await Post(reporter, "/ligan", $"league-decision-{firstMatch}", new(fields));
-        await Post(other, "/ligan", $"league-decision-{firstMatch}", new(fields));
+        await Post(reporter, "/ligan?View=mine", $"league-decision-{firstMatch}", new(fields));
+        await Post(other, "/ligan?View=mine", $"league-decision-{firstMatch}", new(fields));
         Assert.All(await Rows<LeagueMatch>(), m => Assert.Equal(LeagueMatchStatus.Pending, m.Status));
         var stale = new Dictionary<string, string>(fields) { ["Input.Version"] = "outdated" };
-        Assert.Equal(HttpStatusCode.OK, (await Post(opponent, "/ligan", $"league-decision-{firstMatch}", stale)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await Post(opponent, "/ligan?View=mine", $"league-decision-{firstMatch}", stale)).StatusCode);
         Assert.All(await Rows<LeagueMatch>(), m => Assert.Equal(LeagueMatchStatus.Pending, m.Status));
-        var response = await Post(opponent, "/ligan", $"league-decision-{firstMatch}", fields);
+        var response = await Post(opponent, "/ligan?View=mine", $"league-decision-{firstMatch}", fields);
         Assert.Equal(HttpStatusCode.Found, response.StatusCode);
         Assert.Equal("/ligan", new Uri(new Uri("https://localhost"), response.Headers.Location!).AbsolutePath);
         Assert.Equal(LeagueMatchStatus.Confirmed, (await Rows<LeagueMatch>()).Single(m => m.Id == firstMatch).Status);
         Assert.Equal(LeagueMatchStatus.Pending, (await Rows<LeagueMatch>()).Single(m => m.Id == secondMatch).Status);
         var remaining = (await Rows<LeagueMatch>()).Single(m => m.Id == secondMatch);
-        Assert.Equal(HttpStatusCode.Found, (await Post(opponent, "/ligan", $"league-decision-{secondMatch}", new()
+        Assert.Equal(HttpStatusCode.Found, (await Post(opponent, "/ligan?View=mine", $"league-decision-{secondMatch}", new()
         { ["Input.Action"] = "dispute", ["Input.MatchId"] = secondMatch.ToString(), ["Input.SessionId"] = second.ToString(), ["Input.Version"] = remaining.Version })).StatusCode);
-        html = WebUtility.HtmlDecode(await opponent.GetStringAsync("/ligan"));
+        html = WebUtility.HtmlDecode(await opponent.GetStringAsync("/ligan?View=mine"));
         Assert.DoesNotContain("Bekräftad", html); Assert.DoesNotContain("Väntar på motståndaren", html);
         Assert.Contains("Bestridd", html);
         Assert.Equal(1, (await Table()).Single(r => r.PlayerId == a.LeagueId).Matches);
@@ -487,7 +487,7 @@ public sealed class LeagueTests : IDisposable
         Assert.Equal(LeagueOutcome.PlayerOneWin, match.Outcome);
         Assert.Equal(("Aeldari", "Necrons", 92, 61), (match.PlayerOneFaction, match.PlayerTwoFaction, match.PlayerOnePoints, match.PlayerTwoPoints));
         using var client = await Login(a); using var opponent = await Login(b); using var outsider = await Login(stranger); using var visitor = NewClient();
-        var html = WebUtility.HtmlDecode(await client.GetStringAsync("/ligan"));
+        var html = WebUtility.HtmlDecode(await client.GetStringAsync("/ligan?View=mine"));
         Assert.Contains("<h2>Mina matcher</h2>", html);
         Assert.True(html.IndexOf("</table>", StringComparison.Ordinal) < html.IndexOf("<h2>Mina matcher", StringComparison.Ordinal));
         Assert.Contains("Aeldari", html); Assert.Contains("Necrons", html);
@@ -505,14 +505,14 @@ public sealed class LeagueTests : IDisposable
         Assert.DoesNotContain("href=\"/ligan/spela\"", html);
         Assert.DoesNotContain("SeasonId=", html);
         Assert.DoesNotContain("action=confirm", html);
-        Assert.Contains($"league-decision-{match.Id}", await opponent.GetStringAsync("/ligan"));
-        Assert.DoesNotContain("Aeldari", await outsider.GetStringAsync("/ligan"));
-        Assert.DoesNotContain("Mina matcher", await visitor.GetStringAsync("/ligan"));
+        Assert.Contains($"league-decision-{match.Id}", await opponent.GetStringAsync("/ligan?View=mine"));
+        Assert.DoesNotContain("Aeldari", await outsider.GetStringAsync("/ligan?View=mine"));
+        Assert.DoesNotContain("<h2>Mina matcher</h2>", await visitor.GetStringAsync("/ligan?View=mine"));
         var confirmPage = await opponent.GetStringAsync($"/ligan/atgard?action=confirm&session={round}&match={match.Id}");
         Assert.Contains("Aeldari", confirmPage); Assert.Contains("Necrons", confirmPage);
         Assert.True((await MatchAction(b, match.Id, "confirm")).Succeeded);
         Assert.True((await MatchAction(admin, match.Id, "edit", LeagueOutcome.Draw)).Succeeded);
-        html = await client.GetStringAsync("/ligan");
+        html = await client.GetStringAsync("/ligan?View=mine");
         Assert.Equal(2, Regex.Matches(html, "<td>D</td>").Count);
         using (var scope = factory.Services.CreateScope())
         {
@@ -521,7 +521,7 @@ public sealed class LeagueTests : IDisposable
                 .SetProperty(m => m.PlayerOneFaction, (string?)null).SetProperty(m => m.PlayerTwoFaction, (string?)null)
                 .SetProperty(m => m.PlayerOnePoints, (int?)null).SetProperty(m => m.PlayerTwoPoints, (int?)null));
         }
-        Assert.Contains("<td>–</td>", WebUtility.HtmlDecode(await client.GetStringAsync("/ligan")));
+        Assert.Contains("<td>–</td>", WebUtility.HtmlDecode(await client.GetStringAsync("/ligan?View=mine")));
     }
     [Fact]
     public async Task Returning_player_must_explicitly_register_for_each_season_before_appearing_or_joining_rounds()
@@ -540,7 +540,7 @@ public sealed class LeagueTests : IDisposable
             Assert.False((await scope.ServiceProvider.GetRequiredService<LeagueService>().ExecuteAsync(a.Principal, new() { Action = "enroll" })).Succeeded);
         using var client = await Login(a);
         var path = $"/ligan/atgard?action=enroll&season={next.Id}";
-        Assert.Contains($"action=enroll&amp;season={next.Id}", await client.GetStringAsync("/ligan"));
+        Assert.Contains($"action=enroll&amp;season={next.Id}", await client.GetStringAsync("/ligan?View=mine"));
         Assert.Equal(HttpStatusCode.Found, (await Post(client, path, "league-action", new()
         { ["Input.Action"] = "enroll", ["Input.SeasonId"] = next.Id.ToString() })).StatusCode);
         var row = Assert.Single(await Table());
@@ -553,7 +553,7 @@ public sealed class LeagueTests : IDisposable
         Assert.True((await Run(admin, new() { Action = "create", SeasonId = next.Id, Date = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-10) })).Succeeded);
         var previousRound = (await Rows<LeagueSession>()).Max(s => s.Id);
         Assert.False((await Run(a, new() { Action = "join", SessionId = previousRound })).Succeeded);
-        Assert.DoesNotContain("action=enroll", await client.GetStringAsync("/ligan"));
+        Assert.DoesNotContain("action=enroll", await client.GetStringAsync("/ligan?View=mine"));
         Assert.Equal(2, (await Table(old.Id)).Count);
     }
     [Fact]
@@ -679,10 +679,10 @@ public sealed class LeagueTests : IDisposable
     {
         var admin = await User(AccessLevels.Admin); var noRole = await User(null, false);
         using var visitor = NewClient(); using var loggedIn = await Login(noRole); using var manager = await Login(admin);
-        var anonymousHtml = WebUtility.HtmlDecode(await visitor.GetStringAsync("/ligan"));
+        var anonymousHtml = WebUtility.HtmlDecode(await visitor.GetStringAsync("/ligan?View=mine"));
         Assert.Contains("Logga in för att delta", anonymousHtml);
         Assert.DoesNotContain("Du saknar behörighet att delta", anonymousHtml);
-        var html = WebUtility.HtmlDecode(await loggedIn.GetStringAsync("/ligan"));
+        var html = WebUtility.HtmlDecode(await loggedIn.GetStringAsync("/ligan?View=mine"));
         Assert.Contains("Du saknar behörighet att delta eftersom det krävs ett terminspass eller nyckelmedlemskap.", html);
         Assert.DoesNotContain("href=\"/login\"", html);
         Assert.Contains("<caption><h1>40K-liga Höstterminen 2026</h1></caption>", html);
@@ -696,7 +696,7 @@ public sealed class LeagueTests : IDisposable
         { ["Input.Action"] = "close-season", ["Input.SeasonId"] = season.Id.ToString(), ["Input.Version"] = season.Version })).StatusCode);
         Assert.Equal(HttpStatusCode.Found, (await Post(manager, "/ligan/atgard?action=create-season", "league-action", new()
         { ["Input.Action"] = "create-season", ["Input.Year"] = "2027", ["Input.Term"] = "Spring" })).StatusCode);
-        Assert.Contains("40K-liga Vårterminen 2027", WebUtility.HtmlDecode(await visitor.GetStringAsync("/ligan")));
+        Assert.Contains("40K-liga Vårterminen 2027", WebUtility.HtmlDecode(await visitor.GetStringAsync("/ligan?View=mine")));
         Assert.Contains("40K-liga Vårterminen 2027</h1>", WebUtility.HtmlDecode(await visitor.GetStringAsync($"/ligan?SeasonId={season.Id}&Sort=ELO")));
     }
 
@@ -733,6 +733,40 @@ public sealed class LeagueTests : IDisposable
         Assert.DoesNotContain(registrations, r => r.SeasonId == rounds[1].SeasonId);
         await Assert.ThrowsAsync<Microsoft.Data.Sqlite.SqliteException>(() => db.Database.ExecuteSqlRawAsync("INSERT INTO LeagueMatches (SessionId, PlayerOneId, PlayerTwoId, ReporterId, Outcome, Status, Version) VALUES (1, 2, 1, 2, 0, 0, 'duplicate')"));
     }
+    [Fact]
+    public async Task Match_views_default_to_latest_round_for_all_players_and_preserve_selection_when_sorting()
+    {
+        var admin = await User(AccessLevels.Admin);
+        var a = await User(); var b = await User(); var c = await User(); var d = await User();
+        var older = await Round(admin, a, b);
+        await Report(a, b, older);
+        var latest = await Round(admin, a, b, c, d);
+        await Report(a, b, latest);
+        await Report(c, d, latest);
+        await Round(admin, a, b); // An unplayed future round must not hide the latest results.
+        using var visitor = NewClient();
+        var html = WebUtility.HtmlDecode(await visitor.GetStringAsync("/ligan"));
+        Assert.Contains("<h2>Senaste omgången</h2>", html);
+        Assert.Contains($"Omgång {latest}</h3>", html);
+        Assert.DoesNotContain($"Omgång {older}</h3>", html);
+        Assert.Equal(2, Regex.Matches(html, "aria-label=\"Matchresultat\"").Count);
+        Assert.Contains("aria-current=\"page\">Senaste omgången</a>", html);
+        Assert.Contains(">Mina matcher</a>", html);
+        Assert.Contains(">Alla omgångar</a>", html);
+        Assert.DoesNotContain("league-decision-", html);
+        html = WebUtility.HtmlDecode(await visitor.GetStringAsync("/ligan?View=all&Sort=ELO"));
+        Assert.Contains($"Omgång {older}</h3>", html);
+        Assert.Contains($"Omgång {latest}</h3>", html);
+        Assert.Equal(3, Regex.Matches(html, "aria-label=\"Matchresultat\"").Count);
+        Assert.Contains("aria-current=\"page\">Alla omgångar</a>", html);
+        Assert.Contains("View=all&Sort=Player", html);
+        using var member = await Login(a);
+        html = WebUtility.HtmlDecode(await member.GetStringAsync("/ligan?View=mine"));
+        Assert.Contains("<h2>Mina matcher</h2>", html);
+        Assert.Equal(2, Regex.Matches(html, "aria-label=\"Matchresultat\"").Count);
+        Assert.Contains("aria-current=\"page\">Mina matcher</a>", html);
+    }
+
     private async Task<HttpClient> Login(Player player)
     {
         var client = NewClient();

@@ -49,7 +49,7 @@ public sealed class EventService(ApplicationDbContext database, UserManager<Appl
             : new CalendarEvent { CreatedUtc = DateTime.UtcNow };
         if (item is null) return new(false, "Evenemanget finns inte längre.");
         if (item.LeagueSessionId.HasValue) return new(false, "Ligaevenemang hanteras via 40K-ligan.");
-        if (item.MatchRequestId.HasValue) return new(false, "Matchförfrågningar hanteras via Sök match.");
+        if (item.MatchRequestId.HasValue) return new(false, "Matchförfrågningar hanteras via Boka match.");
         if (id.HasValue && item.Version != input.Version) return new(false, "Evenemanget har ändrats. Ladda om sidan innan du försöker igen.");
         if (image is { Length: > 0 })
         {
@@ -92,7 +92,7 @@ public sealed class EventService(ApplicationDbContext database, UserManager<Appl
         var item = await database.Events.FindAsync(id);
         if (item is null) return new(false, "Evenemanget finns inte längre.");
         if (item.LeagueSessionId.HasValue) return new(false, "Ligaevenemang hanteras via 40K-ligan.");
-        if (item.MatchRequestId.HasValue) return new(false, "Matchförfrågningar hanteras via Sök match.");
+        if (item.MatchRequestId.HasValue) return new(false, "Matchförfrågningar hanteras via Boka match.");
         if (item.Version != version) return new(false, "Evenemanget har ändrats. Ladda om sidan innan du försöker igen.");
         database.Events.Remove(item);
         await database.SaveChangesAsync();

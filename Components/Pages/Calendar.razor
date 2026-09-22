@@ -78,7 +78,7 @@
             && chosen.Year == month.Year && chosen.Month == month.Month ? chosen
             : today.Year == month.Year && today.Month == month.Month ? today : month;
         var last = new DateOnly(month.Year, month.Month, DateTime.DaysInMonth(month.Year, month.Month));
-        events = await Database.Events.AsNoTracking().VisibleTo(access.UserId).Where(item => item.Date >= month && item.Date <= last)
+        events = await Requests.VisibleEvents(Database.Events.AsNoTracking(), access, management: false).Where(item => item.Date >= month && item.Date <= last)
             .OrderBy(item => item.Date).ThenBy(item => item.Time).ThenBy(item => item.Id)
             .Summaries().ToListAsync();
     }

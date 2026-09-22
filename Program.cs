@@ -35,6 +35,7 @@ builder.Services.AddScoped<PlayerProfileService>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddScoped<AdvertisementService>();
 builder.Services.AddHostedService<AdvertisementCleanup>();
+builder.Services.AddHostedService<MatchRequestCleanup>();
 builder.Services.AddSingleton<IPlayerRanking, UnavailablePlayerRanking>();
 // Role changes and deleted accounts take effect on the next HTTP request.
 builder.Services.Configure<SecurityStampValidatorOptions>(options => options.ValidationInterval = TimeSpan.Zero);

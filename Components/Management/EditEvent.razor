@@ -58,7 +58,7 @@
     {
         HttpContext.Response.Headers.CacheControl = "no-store";
         var access = await Requests.AccessAsync(HttpContext.User);
-        var item = Id.HasValue ? await Database.Events.AsNoTracking().VisibleTo(access.UserId, access.Admin).IgnoreAutoIncludes().Include(item => item.NewsArticle).SingleOrDefaultAsync(item => item.Id == Id) : null;
+        var item = Id.HasValue ? await Requests.VisibleEvents(Database.Events.AsNoTracking(), access).IgnoreAutoIncludes().Include(item => item.NewsArticle).SingleOrDefaultAsync(item => item.Id == Id) : null;
         if (Id.HasValue && item is null) { missing = true; HttpContext.Response.StatusCode = 404; }
         currentImage = item?.DisplayImageUrl;
         Input ??= item is null ? new() : new EventInput

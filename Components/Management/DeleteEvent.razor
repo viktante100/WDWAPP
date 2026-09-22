@@ -30,7 +30,7 @@
     {
         HttpContext.Response.Headers.CacheControl = "no-store";
         var access = await Requests.AccessAsync(HttpContext.User);
-        item = await Database.Events.AsNoTracking().VisibleTo(access.UserId, access.Admin).SingleOrDefaultAsync(item => item.Id == Id);
+        item = await Requests.VisibleEvents(Database.Events.AsNoTracking(), access).SingleOrDefaultAsync(item => item.Id == Id);
         if (item is null) HttpContext.Response.StatusCode = 404;
         Input ??= new() { Version = item?.Version ?? "" };
     }

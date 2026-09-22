@@ -20,7 +20,7 @@ public sealed class MatchRequestInput
 // without putting mail delivery in the transaction or in the domain service.
 public sealed record MatchAccepted(int RequestId, string OwnerUserId, string AcceptedByUserId, DateTime AcceptedUtc);
 public sealed record MatchRequestResult(bool Succeeded, string Message, int? Id = null, MatchAccepted? Acceptance = null);
-public sealed record MatchRequestAccess(bool Eligible, bool Admin, string? UserId, string? Nickname)
+public sealed record MatchRequestAccess(bool Eligible, bool Admin, string? UserId, string? Nickname, bool KeyMember = false)
 {
     public bool CanPlay => Eligible;
 }
@@ -37,12 +37,29 @@ public sealed class MatchRequestService(ApplicationDbContext database, UserManag
         var user = actor.Identity?.IsAuthenticated == true ? await signIn.ValidateSecurityStampAsync(actor) : null;
         if (user is null) return new(false, false, null, null);
         var roles = await users.GetRolesAsync(user);
-        return new(roles.Any(AccessLevels.Roles.Contains), roles.Contains(AccessLevels.Admin), user.Id, user.UserName);
+        return new(roles.Any(AccessLevels.Roles.Contains), roles.Contains(AccessLevels.Admin), user.Id, user.UserName,
+            roles.Contains(AccessLevels.KeyMember) || roles.Contains(AccessLevels.Admin));
     }
 
-    public IQueryable<MatchRequest> VisibleRequests(MatchRequestAccess access) => Requests().Where(r =>
-        r.AcceptedByUserId == null || access.Admin || access.UserId != null &&
-        (r.OwnerUserId == access.UserId || r.AcceptedByUserId == access.UserId));
+    private IQueryable<string> KeyMemberIds => from membership in database.UserRoles
+        join role in database.Roles on membership.RoleId equals role.Id
+        where role.Name == AccessLevels.KeyMember || role.Name == AccessLevels.Admin
+        select membership.UserId;
+
+    public IQueryable<MatchRequest> VisibleRequests(MatchRequestAccess access)
+    {
+        var today = DateOnly.FromDateTime(LocalNow);
+        return Requests().Where(r => r.CalendarEvent.Date >= today &&
+            (r.AcceptedByUserId == null && (access.KeyMember || KeyMemberIds.Contains(r.OwnerUserId))
+            || access.Admin || access.UserId != null &&
+            (r.OwnerUserId == access.UserId || r.AcceptedByUserId == access.UserId)));
+    }
+
+    public IQueryable<CalendarEvent> VisibleEvents(IQueryable<CalendarEvent> query, MatchRequestAccess access, bool management = true)
+    {
+        var visibleIds = VisibleRequests(management ? access : access with { Admin = false }).Select(r => r.Id);
+        return query.Where(e => e.MatchRequestId == null || visibleIds.Contains(e.MatchRequestId.Value));
+    }
 
     private IQueryable<MatchRequest> Requests() => database.MatchRequests.AsNoTracking().Select(r => new MatchRequest
     {
@@ -97,6 +114,8 @@ public sealed class MatchRequestService(ApplicationDbContext database, UserManag
             var request = await Requests().SingleOrDefaultAsync(r => r.Id == id);
             if (request is null) return new(false, "Förfrågan finns inte längre.");
             if (request.OwnerUserId == access.UserId) return new(false, "Du kan inte acceptera din egen match.");
+            if (!access.KeyMember && !await KeyMemberIds.ContainsAsync(request.OwnerUserId))
+                return new(false, "Minst en av spelarna måste vara nyckelmedlem. Endast nyckelmedlemmar kan besvara den här förfrågan.");
             if (!IsFuture(request.CalendarEvent)) return new(false, "Matchens starttid har passerat.");
             var acceptedUtc = clock.GetUtcNow().UtcDateTime;
             // Atomic compare-and-set is the arbiter, even if callers loaded the same version.

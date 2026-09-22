@@ -19,7 +19,7 @@
         if (Input.MatchId != Match.Id || Input.SessionId != Match.SessionId || Input.Action is not ("confirm" or "dispute"))
         { error = "Ogiltig matchåtgärd. Ladda om sidan."; return; }
         var result = await League.ExecuteAsync(HttpContext.User, Input);
-        if (result.Succeeded) Navigation.NavigateTo("/ligan", forceLoad: true);
+        if (result.Succeeded) Navigation.NavigateTo("/ligan?View=mine", forceLoad: true);
         else error = result.Message;
     }
 }

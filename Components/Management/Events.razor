@@ -25,7 +25,7 @@
     {
         HttpContext.Response.Headers.CacheControl = "no-store";
         var access = await Requests.AccessAsync(HttpContext.User);
-        items = await Database.Events.AsNoTracking().VisibleTo(access.UserId, access.Admin)
+        items = await Requests.VisibleEvents(Database.Events.AsNoTracking(), access)
         .OrderByDescending(item => item.Date).ThenBy(item => item.Time).ThenBy(item => item.Id)
         .Summaries().ToListAsync();
     }

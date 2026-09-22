@@ -5,16 +5,21 @@
 @inject MatchRequestService Requests
 @inject NavigationManager Navigation
 
-<PageTitle>Sök match · Wermland Dice Warriors</PageTitle>
+<PageTitle>Boka match · Wermland Dice Warriors</PageTitle>
 <section class="account-panel news-editor">
-    <h1>@(Id.HasValue ? "Ändra matchförfrågan" : "Sök match")</h1>
+    <h1>@(Id.HasValue ? "Ändra matchförfrågan" : "Boka match")</h1>
     <p><a href="/kalender">Visa kalendern</a></p>
     @if (error is not null) { <p role="alert" class="validation-message">@error</p> }
     @if (!access.CanPlay)
     { <p>Terminspass eller högre behörighet krävs för att söka match.</p> }
     else if (editable)
     {
-        <p>Du söker match som <strong>@access.Nickname</strong>. Lediga förfrågningar visas offentligt. När matchen bokas visas den bara för deltagarna, och admin kan hantera den.</p>
+        <p>Du söker match som <strong>@access.Nickname</strong>. Minst en av spelarna måste vara nyckelmedlem.</p>
+        @if (access.KeyMember)
+        { <p>Lediga förfrågningar visas offentligt och kan besvaras av medlemmar och nyckelmedlemmar.</p> }
+        else
+        { <p>Endast nyckelmedlemmar kommer att kunna se och besvara din efterlysning. Du kan själv se och hantera den.</p> }
+        <p>När matchen bokas visas den bara för deltagarna, och admin kan hantera den. Matchen och kalenderposten raderas efter speldatumet.</p>
         <EditForm Model="Input" method="post" FormName="match-request" OnValidSubmit="Save">
             <DataAnnotationsValidator /><ValidationSummary role="alert" />
             <input type="hidden" name="Input.Version" value="@Input.Version" />
@@ -24,7 +29,7 @@
                 <option value="">Välj spel</option>
                 @foreach (var game in MatchGames.All) { <option value="@game">@game</option> }
             </InputSelect>
-            <button type="submit">@(Id.HasValue ? "Spara ändringar" : "Sök match")</button>
+            <button type="submit">@(Id.HasValue ? "Spara ändringar" : "Boka match")</button>
         </EditForm>
     }
 </section>

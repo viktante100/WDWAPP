@@ -26,20 +26,37 @@
         </table>
     </div>
     </div>
+    <nav class="league-match-views" aria-label="Visa ligamatcher" data-enhance-nav="true">
+        @foreach (var view in matchViews)
+        {
+            <a href="@ViewLink(view.Key)" aria-current="@(SelectedView == view.Key ? "page" : null)">@view.Label</a>
+        }
+    </nav>
     @if (season is null) { <p>Ingen liga har skapats ännu.</p> }
     else if (season.IsClosed) { <p>Den här ligan är avslutad.</p> }
     else if (rows.Count == 0) { <p>Inga ligaspelare ännu.</p> }
     <AuthorizeView Policy="@AccessLevels.Admin"><p><a href="/hantera/ligan">Hantera ligan</a></p></AuthorizeView>
-    <AuthorizeView Policy="@AccessLevels.Member">
-        <Authorized><WDWAPP.Components.League.MyMatches Season="season" /></Authorized>
-        <NotAuthorized>
-            @if (context.User.Identity?.IsAuthenticated == true)
-            { <p>Du saknar behörighet att delta eftersom det krävs ett terminspass eller nyckelmedlemskap.</p> }
-            else { <p><a href="/login">Logga in för att delta</a></p> }
-        </NotAuthorized>
-    </AuthorizeView>
+    @if (SelectedView == "mine")
+    {
+        <AuthorizeView Policy="@AccessLevels.Member">
+            <Authorized><WDWAPP.Components.League.MyMatches Season="season" /></Authorized>
+            <NotAuthorized>
+                @if (context.User.Identity?.IsAuthenticated == true)
+                { <p>Du saknar behörighet att delta eftersom det krävs ett terminspass eller nyckelmedlemskap.</p> }
+                else { <p><a href="/login">Logga in för att delta</a></p> }
+            </NotAuthorized>
+        </AuthorizeView>
+    }
+    else
+    {
+        <WDWAPP.Components.League.RoundMatches Season="season" LatestOnly="@(SelectedView == "latest")" />
+    }
 </section>
 @code {
+    [SupplyParameterFromQuery] public string? View { get; set; }
+    private readonly (string Key, string Label)[] matchViews = [("latest", "Senaste omgången"), ("mine", "Mina matcher"), ("all", "Alla omgångar")];
+    private string SelectedView => View is "mine" or "all" ? View : "latest";
+    private string ViewLink(string view) => $"/ligan?View={view}&Sort={SortColumn}&Ascending={IsAscending.ToString().ToLowerInvariant()}";
     [SupplyParameterFromQuery] public string? Sort { get; set; }
     [SupplyParameterFromQuery] public bool? Ascending { get; set; }
     private LeagueSeason? season;
@@ -52,5 +69,5 @@
         season = await LeagueData.CurrentSeasonAsync();
         rows = season is null ? [] : LeagueRanking.Sort(await LeagueData.StandingsAsync(season.Id), SortColumn, IsAscending);
     }
-    private string SortLink(string column) => $"/ligan?Sort={column}&Ascending={(SortColumn == column ? !IsAscending : column is "Position" or "Player").ToString().ToLowerInvariant()}";
+    private string SortLink(string column) => $"/ligan?View={SelectedView}&Sort={column}&Ascending={(SortColumn == column ? !IsAscending : column is "Position" or "Player").ToString().ToLowerInvariant()}";
 }

@@ -4,9 +4,6 @@ namespace WDWAPP.Services;
 
 public static class CalendarPresentation
 {
-    public static IQueryable<CalendarEvent> VisibleTo(this IQueryable<CalendarEvent> query, string? userId, bool admin = false)
-        => query.Where(e => e.MatchRequestId == null || e.MatchRequest!.AcceptedByUserId == null
-            || admin || userId != null && (e.MatchRequest.OwnerUserId == userId || e.MatchRequest.AcceptedByUserId == userId));
     public static string Label(CalendarEventType type) => type switch
     {
         CalendarEventType.MatchRequest => "Matchsök", CalendarEventType.LeagueRound => "Ligaomgång",

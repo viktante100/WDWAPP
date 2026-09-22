@@ -1,0 +1,54 @@
+@inject ApplicationDbContext Database
+<h2>@(LatestOnly ? "Senaste omgången" : "Alla omgångar")</h2>
+@if (rounds.Count == 0)
+{
+    <p>Det finns inga spelade omgångar i den här ligan ännu.</p>
+}
+@foreach (var round in rounds)
+{
+    <section>
+        <h3>@round.Date.ToString("yyyy-MM-dd") · Omgång @round.Id</h3>
+        @foreach (var match in matches.Where(m => m.SessionId == round.Id))
+        {
+            <article class="news-content red-border league-match-card">
+                <LeagueMatchSummary Match="match" One="@Name(match.PlayerOneId)" Two="@Name(match.PlayerTwoId)"
+                    ShowRatingChanges="true" OneRatingChange="@RatingChange(match.Id, match.PlayerOneId)" TwoRatingChange="@RatingChange(match.Id, match.PlayerTwoId)" />
+                @if (match.Status == LeagueMatchStatus.Pending) { <p>Inväntar bekräftelse</p> }
+            </article>
+        }
+        @foreach (var bye in byes.Where(p => p.SessionId == round.Id))
+        {
+            <p>@Name(bye.PlayerId): WO · 3 ligapoäng</p>
+        }
+    </section>
+}
+@code {
+    [Parameter] public LeagueSeason? Season { get; set; }
+    [Parameter] public bool LatestOnly { get; set; }
+    private List<LeagueSession> rounds = [];
+    private List<LeagueMatch> matches = [];
+    private List<LeagueParticipation> byes = [];
+    private Dictionary<int, string> names = [];
+    private List<LeagueRating> ratings = [];
+    private string Name(int id) => names.GetValueOrDefault(id, "Spelare");
+    private int? RatingChange(int matchId, int playerId) => ratings.FirstOrDefault(r => r.MatchId == matchId && r.PlayerId == playerId)?.Change;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        rounds = []; matches = []; byes = []; names = []; ratings = [];
+        if (Season is null) return;
+        var query = Database.LeagueSessions.AsNoTracking()
+            .Where(s => s.SeasonId == Season.Id && s.Status != LeagueSessionStatus.Cancelled
+                && (Database.LeagueMatches.Any(m => m.SessionId == s.Id)
+                    || Database.LeagueParticipations.Any(p => p.SessionId == s.Id && p.IsBye)))
+            .OrderByDescending(s => s.Date).ThenByDescending(s => s.Id);
+        rounds = await (LatestOnly ? query.Take(1) : query).ToListAsync();
+        var roundIds = rounds.Select(s => s.Id).ToArray();
+        matches = await Database.LeagueMatches.AsNoTracking().Where(m => roundIds.Contains(m.SessionId)).OrderBy(m => m.Id).ToListAsync();
+        byes = await Database.LeagueParticipations.AsNoTracking().Where(p => roundIds.Contains(p.SessionId) && p.IsBye).OrderBy(p => p.PlayerId).ToListAsync();
+        var playerIds = matches.SelectMany(m => new[] { m.PlayerOneId, m.PlayerTwoId }).Concat(byes.Select(p => p.PlayerId)).Distinct().ToArray();
+        names = await Database.LeaguePlayers.AsNoTracking().Include(p => p.User).Where(p => playerIds.Contains(p.Id)).ToDictionaryAsync(p => p.Id, p => p.User.UserName!);
+        var matchIds = matches.Select(m => m.Id).ToArray();
+        ratings = await Database.LeagueRatings.AsNoTracking().Where(r => matchIds.Contains(r.MatchId)).ToListAsync();
+    }
+}

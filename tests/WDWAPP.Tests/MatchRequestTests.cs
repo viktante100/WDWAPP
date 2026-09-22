@@ -77,7 +77,7 @@ public sealed class MatchRequestTests : IDisposable
     [Fact]
     public async Task Guests_and_nonmembers_cannot_create_or_accept()
     {
-        var owner = await User();
+        var owner = await User(AccessLevels.KeyMember);
         var item = await Request((await Save(owner)).Id!.Value);
         foreach (var actor in new[] { Guest, await User(null) })
         {
@@ -101,18 +101,18 @@ public sealed class MatchRequestTests : IDisposable
         Assert.Equal(CalendarEventType.MatchRequest, entry.Type);
         Assert.Equal(item.Id, entry.MatchRequestId);
         Assert.Equal(owner.Id, item.OwnerUserId);
-        using var visitor = Client();
+        using var visitor = role == AccessLevels.Member ? await Login(await User(AccessLevels.KeyMember)) : Client();
         var html = WebUtility.HtmlDecode(await visitor.GetStringAsync($"/kalender?Month={entry.Date:yyyy-MM}&Day={entry.Date:yyyy-MM-dd}"));
         Assert.Contains(owner.Nickname, html); Assert.Contains(item.Game, html); Assert.Contains("18:30", html);
         Assert.Contains("event-match", html); Assert.DoesNotContain("Private Fullname", html);
-        Assert.DoesNotContain("Acceptera match", await visitor.GetStringAsync($"/sok-match/{item.Id}"));
+        Assert.Equal(role == AccessLevels.Member, (await visitor.GetStringAsync($"/sok-match/{item.Id}")).Contains("Acceptera match"));
         var redirect = await visitor.GetAsync($"/evenemang/{entry.Id}");
         Assert.Equal(HttpStatusCode.Found, redirect.StatusCode);
         Assert.EndsWith($"/sok-match/{item.Id}", redirect.Headers.Location!.OriginalString);
         using var client = await Login(owner);
         Assert.Contains("href=\"/sok-match\"", (await client.GetStringAsync("/")).Split("</nav>")[0]);
         Assert.Contains(owner.Nickname, await client.GetStringAsync("/sok-match"));
-        var opponent = await User(role);
+        var opponent = await User(AccessLevels.KeyMember);
         Assert.Null(owner.ProfileId);
         Assert.Null(opponent.ProfileId);
         Assert.True((await Accept(opponent, item)).Succeeded);
@@ -135,7 +135,7 @@ public sealed class MatchRequestTests : IDisposable
     [Fact]
     public async Task Http_creation_and_acceptance_ignore_spoofed_identity_and_require_antiforgery()
     {
-        var owner = await User(); var other = await User();
+        var owner = await User(AccessLevels.KeyMember); var other = await User();
         using var client = await Login(owner);
         Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsync("/sok-match", new FormUrlEncodedContent(new Dictionary<string, string> { ["_handler"] = "match-request" }))).StatusCode);
         var input = Input();
@@ -160,7 +160,7 @@ public sealed class MatchRequestTests : IDisposable
     [Fact]
     public async Task Only_one_other_player_can_accept_and_committed_acceptance_is_returned()
     {
-        var owner = await User(); var other = await User(); var third = await User();
+        var owner = await User(AccessLevels.KeyMember); var other = await User(); var third = await User();
         var item = await Request((await Save(owner)).Id!.Value);
         Assert.False((await Accept(owner, item)).Succeeded);
         var result = await Accept(other, item);
@@ -181,7 +181,7 @@ public sealed class MatchRequestTests : IDisposable
     [Fact]
     public async Task Simultaneous_acceptance_in_separate_database_contexts_has_exactly_one_winner()
     {
-        var owner = await User(); var one = await User(); var two = await User();
+        var owner = await User(AccessLevels.KeyMember); var one = await User(); var two = await User();
         var item = await Request((await Save(owner)).Id!.Value);
         var start = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var first = Task.Run(async () => { await start.Task; return await Accept(one, item); });
@@ -197,7 +197,7 @@ public sealed class MatchRequestTests : IDisposable
     [Fact]
     public async Task Edits_and_deletes_enforce_ownership_versions_and_calendar_synchronization()
     {
-        var owner = await User(); var other = await User(); var admin = await User(AccessLevels.Admin, profile: false);
+        var owner = await User(AccessLevels.KeyMember); var other = await User(); var admin = await User(AccessLevels.Admin, profile: false);
         var item = await Request((await Save(owner)).Id!.Value);
         Assert.False((await Delete(other, item)).Succeeded);
         var edit = Input(); edit.Version = item.Version; edit.Date = edit.Date!.Value.AddDays(1); edit.Time = "20:00"; edit.Game = MatchGames.All[1];
@@ -221,7 +221,7 @@ public sealed class MatchRequestTests : IDisposable
     [Fact]
     public async Task Past_missing_invalid_games_and_invalid_times_are_rejected()
     {
-        var owner = await User();
+        var owner = await User(AccessLevels.KeyMember);
         foreach (var input in new[] { new MatchRequestInput(), new() { Date = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-1), Time = "12:00", Game = MatchGames.All[0] },
             new() { Date = Input().Date, Time = "25:00", Game = MatchGames.All[0] }, new() { Date = Input().Date, Time = "18:00", Game = "Forged game" } })
             Assert.False((await Save(owner, input: input)).Succeeded);
@@ -231,7 +231,7 @@ public sealed class MatchRequestTests : IDisposable
     [Fact]
     public async Task Revoked_membership_is_checked_from_database_not_stale_claims()
     {
-        var owner = await User(); var other = await User();
+        var owner = await User(AccessLevels.KeyMember); var other = await User();
         var item = await Request((await Save(owner)).Id!.Value);
         using (var scope = factory.Services.CreateScope())
         {
@@ -261,7 +261,7 @@ public sealed class MatchRequestTests : IDisposable
     [Fact]
     public async Task Generated_match_events_cannot_be_edited_or_deleted_through_manual_event_service()
     {
-        var owner = await User(); var admin = await User(AccessLevels.Admin);
+        var owner = await User(AccessLevels.KeyMember); var admin = await User(AccessLevels.Admin);
         var item = await Request((await Save(owner)).Id!.Value);
         using var scope = factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
@@ -277,7 +277,7 @@ public sealed class MatchRequestTests : IDisposable
     [Fact]
     public async Task Booked_matches_are_private_to_participants_with_admin_management_access()
     {
-        var owner = await User(); var other = await User(); var unrelated = await User(AccessLevels.KeyMember); var admin = await User(AccessLevels.Admin);
+        var owner = await User(AccessLevels.KeyMember); var other = await User(); var unrelated = await User(AccessLevels.KeyMember); var admin = await User(AccessLevels.Admin);
         var item = await Request((await Save(owner)).Id!.Value);
         Assert.True((await Accept(other, item)).Succeeded);
         var calendar = $"/kalender?Month={item.CalendarEvent.Date:yyyy-MM}&Day={item.CalendarEvent.Date:yyyy-MM-dd}";
@@ -308,7 +308,7 @@ public sealed class MatchRequestTests : IDisposable
     [Fact]
     public async Task Multiple_events_on_one_date_are_listed_with_distinct_type_markers()
     {
-        var owner = await User(); var item = await Request((await Save(owner)).Id!.Value);
+        var owner = await User(AccessLevels.KeyMember); var item = await Request((await Save(owner)).Id!.Value);
         using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
@@ -325,7 +325,7 @@ public sealed class MatchRequestTests : IDisposable
     [Fact]
     public async Task Deleting_a_player_profile_does_not_remove_or_change_account_bookings()
     {
-        var owner = await User(profile: true); var other = await User();
+        var owner = await User(AccessLevels.KeyMember, profile: true); var other = await User();
         var item = await Request((await Save(owner)).Id!.Value);
         Assert.True((await Accept(other, item)).Succeeded);
         using var scope = factory.Services.CreateScope();
@@ -397,5 +397,81 @@ public sealed class MatchRequestTests : IDisposable
         Assert.Equal(2, await db.MatchRequests.CountAsync());
         Assert.Equal(2, await db.Events.CountAsync());
     }
+    [Fact]
+    public async Task Member_requests_are_visible_only_to_owner_and_key_members_and_forged_acceptance_is_denied()
+    {
+        var owner = await User(AccessLevels.Member); var member = await User(AccessLevels.Member);
+        var key = await User(AccessLevels.KeyMember);
+        var item = await Request((await Save(owner)).Id!.Value);
+        var path = $"/sok-match/{item.Id}";
+        var calendar = $"/kalender?Month={item.CalendarEvent.Date:yyyy-MM}&Day={item.CalendarEvent.Date:yyyy-MM-dd}";
+        using var guest = Client(); using var memberClient = await Login(member);
+        foreach (var client in new[] { guest, memberClient })
+        {
+            Assert.DoesNotContain(owner.Nickname, await client.GetStringAsync(calendar));
+            Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync(path)).StatusCode);
+            Assert.Equal(HttpStatusCode.NotFound, (await client.GetAsync($"/evenemang/{item.CalendarEvent.Id}")).StatusCode);
+        }
+        Assert.False((await Accept(member, item)).Succeeded);
+        // A valid antiforgery token from another page must not bypass match authorization.
+        var form = await memberClient.GetStringAsync("/sok-match");
+        var token = WebUtility.HtmlDecode(Regex.Match(form, "name=\"__RequestVerificationToken\" value=\"([^\"]+)\"").Groups[1].Value);
+        var forged = await memberClient.PostAsync(path, new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["__RequestVerificationToken"] = token, ["_handler"] = "match-accept", ["AcceptInput.Version"] = item.Version
+        }));
+        Assert.Equal(HttpStatusCode.BadRequest, forged.StatusCode);
+        Assert.Null((await Request(item.Id)).AcceptedByUserId);
+        using var ownerClient = await Login(owner); using var keyClient = await Login(key);
+        Assert.Contains("Endast nyckelmedlemmar kommer att kunna se och besvara din efterlysning", WebUtility.HtmlDecode(await ownerClient.GetStringAsync("/sok-match")));
+        Assert.Contains(">Boka match</a>", await ownerClient.GetStringAsync("/"));
+        Assert.Contains(owner.Nickname, await ownerClient.GetStringAsync(path));
+        Assert.Contains(owner.Nickname, await keyClient.GetStringAsync(calendar));
+        Assert.Contains("Acceptera match", await keyClient.GetStringAsync(path));
+        Assert.True((await Accept(key, item)).Succeeded);
+    }
+
+    [Fact]
+    public async Task Key_membership_changes_apply_to_visibility_and_acceptance_without_relying_on_old_claims()
+    {
+        var owner = await User(AccessLevels.KeyMember); var member = await User(AccessLevels.Member);
+        var item = await Request((await Save(owner)).Id!.Value);
+        using var scope = factory.Services.CreateScope();
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+        var user = (await users.FindByIdAsync(owner.Id))!;
+        Assert.True((await users.RemoveFromRoleAsync(user, AccessLevels.KeyMember)).Succeeded);
+        Assert.True((await users.AddToRoleAsync(user, AccessLevels.Member)).Succeeded);
+        var service = scope.ServiceProvider.GetRequiredService<MatchRequestService>();
+        Assert.False(await service.VisibleRequests(await service.AccessAsync(member.Principal)).AnyAsync(r => r.Id == item.Id));
+        Assert.False((await Accept(member, item)).Succeeded);
+        var otherRequest = await Request((await Save(member)).Id!.Value);
+        Assert.False((await Accept(owner, otherRequest)).Succeeded);
+        Assert.Null((await Request(item.Id)).AcceptedByUserId);
+    }
+
+    [Fact]
+    public async Task Cleanup_deletes_open_and_booked_requests_after_stockholm_midnight_and_cascades_calendar_entries()
+    {
+        var owner = await User(AccessLevels.KeyMember); var member = await User();
+        var open = await Request((await Save(owner)).Id!.Value);
+        var booked = await Request((await Save(owner)).Id!.Value);
+        Assert.True((await Accept(member, booked)).Succeeded);
+        var future = await Request((await Save(owner)).Id!.Value);
+        using var scope = factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        var date = Input().Date!.Value;
+        await db.Events.Where(e => e.MatchRequestId == future.Id).ExecuteUpdateAsync(s => s.SetProperty(e => e.Date, date.AddDays(1)));
+        db.Events.Add(new() { Title = "Keep manual event", Type = CalendarEventType.GameDay, Date = date.AddDays(-1) });
+        await db.SaveChangesAsync();
+        var midnight = new DateTimeOffset(date.AddDays(1).ToDateTime(TimeOnly.MinValue),
+            TimeZoneInfo.FindSystemTimeZoneById("Europe/Stockholm").GetUtcOffset(date.AddDays(1).ToDateTime(TimeOnly.MinValue)));
+        Assert.Equal(0, await MatchRequestCleanup.DeleteExpiredBatchAsync(db, midnight.AddSeconds(-1)));
+        Assert.Equal(2, await MatchRequestCleanup.DeleteExpiredBatchAsync(db, midnight));
+        Assert.Equal(future.Id, (await db.MatchRequests.SingleAsync()).Id);
+        Assert.False(await db.Events.AnyAsync(e => e.MatchRequestId == open.Id || e.MatchRequestId == booked.Id));
+        Assert.Equal(2, await db.Events.CountAsync());
+        Assert.Equal(0, await MatchRequestCleanup.DeleteExpiredBatchAsync(db, midnight));
+    }
+
     public void Dispose() => factory.Dispose();
 }
